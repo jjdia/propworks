@@ -14,7 +14,7 @@ co-owner logins exist alongside the owner/admin.
 ## Tech stack
 
 - React 19 + Vite 8 + TypeScript, Tailwind v4
-- react-router (**HashRouter** — deliberate, see note below)
+- react-router (**BrowserRouter** + Vite `base` basename — see note below)
 - Zustand for app state
 - Dexie (IndexedDB) as local source of truth for the owner's own private data
 - Supabase (Postgres + Auth + Storage + Edge Functions) as sync target and
@@ -23,9 +23,13 @@ co-owner logins exist alongside the owner/admin.
 - jsPDF (dynamically imported) for PDF generation; SheetJS (xlsx) for Excel
   export; Recharts for charts
 
-**Why HashRouter:** deploy targets (GitHub Pages, Netlify static) don't
-reliably rewrite arbitrary paths to index.html, and hash routing sidesteps
-that entirely. Don't switch to BrowserRouter without solving that first.
+**Why BrowserRouter (not HashRouter):** path URLs like `/propworks/admin`
+are what users expect; HashRouter only matched `#/admin`, so plain `/admin`
+loaded the SPA shell but showed home. GitHub Pages has no SPA rewrite, so
+deploy copies `dist/index.html` → `dist/404.html` (see `.github/workflows/deploy.yml`)
+and Netlify uses its own fallback. `BrowserRouter` uses `basename` from Vite
+`base` (`/propworks`, no trailing slash). A one-time redirect in `App.tsx`
+maps legacy `#/…` bookmarks to the path equivalent.
 
 ## Architecture — the one thing to understand before touching anything
 

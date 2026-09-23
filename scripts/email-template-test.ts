@@ -1,4 +1,4 @@
-import { buildOnboardingEmail, buildMaintenanceUpdateEmail, buildBroadcastEmail } from '../src/lib/emailTemplates';
+import { buildOnboardingEmail, buildMaintenanceUpdateEmail, buildBroadcastEmail, ADMIN_APP_URL } from '../src/lib/emailTemplates';
 
 let pass = 0, fail = 0;
 function check(label: string, cond: boolean) {
@@ -34,6 +34,12 @@ function check(label: string, cond: boolean) {
   check('broadcast uses the exact subject the owner typed', email.subject === 'Pest control Tuesday');
   check('broadcast body includes tenant name', email.html.includes('Jane Doe'));
   check('broadcast body converts newlines to <br/>', email.html.includes('<br/>'));
+}
+
+
+{
+  check('ADMIN_APP_URL is path-based /admin', ADMIN_APP_URL === 'https://jjdia.github.io/propworks/admin');
+  check('ADMIN_APP_URL has no hash', !ADMIN_APP_URL.includes('#'));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

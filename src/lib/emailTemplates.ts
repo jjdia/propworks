@@ -3,7 +3,10 @@ export interface EmailContent {
   html: string;
 }
 
+// Path-based site URL (BrowserRouter). Prefer …/propworks/admin over hash
+// URLs like …/propworks/#/admin for any admin deep links.
 const APP_URL = 'https://jjdia.github.io/propworks';
+export const ADMIN_APP_URL = `${APP_URL}/admin`;
 
 function wrapper(bodyHtml: string): string {
   return `<div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; color: #1e293b;">

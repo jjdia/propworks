@@ -28,6 +28,11 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      # GitHub Pages has no SPA rewrite: unknown paths (e.g. /propworks/admin)
+      # must serve the app shell. Copying index.html → 404.html is the standard
+      # Pages fallback so BrowserRouter deep links work on refresh/direct open.
+      - name: SPA fallback for deep links
+        run: cp dist/index.html dist/404.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
@@ -50,19 +55,25 @@ jobs:
       - name: Verify GitHub Pages site is live
         run: |
           set -euo pipefail
-          URL="https://jjdia.github.io/propworks/"
           # Pages can lag a few seconds after deploy-pages reports success.
-          for i in 1 2 3 4 5 6 7 8 9 10; do
-            echo "Attempt $i: GET $URL"
-            BODY_FILE="$(mktemp)"
-            HTTP_CODE="$(curl -sS -L -o "$BODY_FILE" -w "%{http_code}" "$URL" || true)"
-            if [ "$HTTP_CODE" = "200" ] && grep -q "PropertyWorks" "$BODY_FILE"; then
-              echo "OK: HTTP $HTTP_CODE and HTML contains PropertyWorks"
-              head -n 20 "$BODY_FILE"
-              exit 0
-            fi
-            echo "Not ready yet (HTTP $HTTP_CODE); sleeping 15s..."
-            sleep 15
-          done
-          echo "FAIL: site did not return 200 with PropertyWorks marker within retries"
-          exit 1
+          check_url() {
+            local URL="$1"
+            local LABEL="$2"
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+              echo "Attempt $i ($LABEL): GET $URL"
+              BODY_FILE="$(mktemp)"
+              HTTP_CODE="$(curl -sS -L -o "$BODY_FILE" -w "%{http_code}" "$URL" || true)"
+              if [ "$HTTP_CODE" = "200" ] && grep -q "PropertyWorks" "$BODY_FILE"; then
+                echo "OK ($LABEL): HTTP $HTTP_CODE and HTML contains PropertyWorks"
+                head -n 20 "$BODY_FILE"
+                return 0
+              fi
+              echo "Not ready yet ($LABEL HTTP $HTTP_CODE); sleeping 15s..."
+              sleep 15
+            done
+            echo "FAIL: $LABEL did not return 200 with PropertyWorks marker within retries"
+            return 1
+          }
+          check_url "https://jjdia.github.io/propworks/" "home"
+          # Deep link must hit the SPA shell via 404.html fallback (not a hard 404).
+          check_url "https://jjdia.github.io/propworks/admin" "admin deep link"
