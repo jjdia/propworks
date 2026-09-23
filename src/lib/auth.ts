@@ -50,8 +50,9 @@ export async function signOut() {
 // clicked, logs the browser into a special short-lived recovery session
 // and Supabase fires a 'PASSWORD_RECOVERY' auth event (see onAuthChange
 // below and App.tsx) — that's what triggers the "set a new password"
-// screen, rather than a dedicated route, since parsing recovery tokens out
-// of the URL is unreliable together with HashRouter.
+// screen, rather than a dedicated route. Prefer the auth event over
+// parsing recovery tokens from the URL (hash/query fragment handling
+// varies by redirect host and is easy to get wrong).
 export async function resetPasswordForEmail(email: string) {
   if (!supabase) throw new Error('Supabase is not configured.');
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });

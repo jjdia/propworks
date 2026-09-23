@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { supabaseConfigured } from './lib/supabase';
 import { getSession, onAuthChange } from './lib/auth';
 import { getMyProfile } from './lib/maintenance';
@@ -27,10 +27,28 @@ import { AdminUsersPage } from './pages/admin';
 import { Login } from './pages/Login';
 import { SetNewPassword } from './pages/SetNewPassword';
 
-// HashRouter (not BrowserRouter) deliberately - GitHub Pages/Netlify serve
-// this as a static site with no guaranteed server-side rewrite, so a
-// path-based router would 404 on refresh at any route other than "/".
+// BrowserRouter + basename from Vite `base` (e.g. `/propworks`). GitHub Pages
+// deep links work because deploy copies dist/index.html → dist/404.html so
+// unknown paths under the site still serve the SPA shell. Legacy `#/…`
+// bookmarks are redirected once to the path equivalent (see below).
+const ROUTER_BASENAME = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '/';
+
+/** One-time: `/propworks/#/admin` (or any `#/…`) → `/propworks/admin`. */
+function redirectLegacyHashRoute() {
+  if (typeof window === 'undefined') return;
+  const { hash, search } = window.location;
+  if (!hash.startsWith('#/')) return;
+  const body = hash.slice(1); // e.g. "/admin" or "/admin?x=1"
+  const q = body.indexOf('?');
+  const hashPath = q >= 0 ? body.slice(0, q) : body;
+  const hashSearch = q >= 0 ? body.slice(q) : '';
+  const base = ROUTER_BASENAME === '/' ? '' : ROUTER_BASENAME;
+  const path = hashPath === '/' ? (base || '/') : `${base}${hashPath}`;
+  window.location.replace(`${path}${hashSearch || search}`);
+}
+
 export default function App() {
+  redirectLegacyHashRoute();
   const [ready, setReady] = useState(false);
   const ownerId = useAppStore((s) => s.ownerId);
   const profile = useAppStore((s) => s.profile);
@@ -119,7 +137,7 @@ export default function App() {
 
   return (
     <RecoveryBoundary>
-      <HashRouter>
+      <BrowserRouter basename={ROUTER_BASENAME}>
         <Routes>
           <Route element={<Layout />}>
             <Route path="/account" element={<Account />} />
@@ -149,7 +167,7 @@ export default function App() {
             )}
           </Route>
         </Routes>
-      </HashRouter>
+      </BrowserRouter>
     </RecoveryBoundary>
   );
 }

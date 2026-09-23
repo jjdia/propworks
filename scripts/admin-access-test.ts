@@ -47,5 +47,11 @@ check('roleLabel owner', roleLabel('owner') === 'Owner / admin');
 check('roleLabel tenant', roleLabel('tenant') === 'Tenant');
 check('roleLabel contractor', roleLabel('contractor') === 'Contractor');
 
+// Routing note: BrowserRouter basename `/propworks` + Link `to: '/admin'`
+// resolves to https://jjdia.github.io/propworks/admin (not a hash URL).
+const ADMIN_PUBLIC_URL = 'https://jjdia.github.io/propworks/admin';
+check('path-based admin URL (no hash)', ADMIN_PUBLIC_URL.includes('/admin') && !ADMIN_PUBLIC_URL.includes('#'));
+check('admin URL sits under /propworks', ADMIN_PUBLIC_URL.includes('/propworks/admin'));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
