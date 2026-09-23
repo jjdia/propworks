@@ -1,4 +1,4 @@
 // Bumped on every deploy so the version is visible INSIDE the running app
 // (More page footer), not just in the zip filename — which disappears the
 // moment it's uploaded to Netlify. Keep this in sync with the zip filename.
-export const APP_VERSION = 'v23 — automated backups + Account export/restore';
+export const APP_VERSION = 'v24 — admin users/roles page';

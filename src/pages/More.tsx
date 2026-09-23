@@ -5,6 +5,8 @@ import { createOwnerInvite } from '../lib/maintenance';
 import { useAppStore } from '../store/useAppStore';
 
 const LINKS = [
+  { to: '/admin', label: 'Admin — Users & roles', icon: '🛡️' },
+  { to: '/account', label: 'Account & backups', icon: '👤' },
   { to: '/notifications', label: 'Notifications', icon: '🔔' },
   { to: '/broadcasts', label: 'Announcements', icon: '📢' },
   { to: '/reports', label: 'Reports & Tax Export', icon: '📊' },
