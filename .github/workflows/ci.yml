@@ -45,7 +45,8 @@ jobs:
             scripts/lease-template-test.ts \
             scripts/email-template-test.ts \
             scripts/overdue-test.ts \
-            scripts/maintenance-schedule-test.ts
+            scripts/maintenance-schedule-test.ts \
+            scripts/admin-access-test.ts
           do
             echo "::group::npx tsx $f"
             npx tsx "$f"

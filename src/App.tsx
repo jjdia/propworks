@@ -23,6 +23,7 @@ import { More } from './pages/More';
 import { TenantHome } from './pages/TenantHome';
 import { ContractorJobs } from './pages/ContractorJobs';
 import { Account } from './pages/Account';
+import { AdminUsersPage } from './pages/admin';
 import { Login } from './pages/Login';
 import { SetNewPassword } from './pages/SetNewPassword';
 
@@ -143,6 +144,7 @@ export default function App() {
                 <Route path="/notifications" element={<Notifications />} />
                 <Route path="/broadcasts" element={<Broadcasts />} />
                 <Route path="/more" element={<More />} />
+                <Route path="/admin" element={<AdminUsersPage />} />
               </>
             )}
           </Route>
