@@ -57,6 +57,18 @@ requests, contractor marketplace, documents, broadcast center, tax export.
 The schema and sync engine are built so those slot in as more tables +
 pages without touching the persistence layer.
 
+## Backups & recovery
+
+See **`ops/BACKUP.md`** for the full picture (client Dexie rolling backup +
+download/restore on the Account page, and the daily GitHub Actions Supabase
+`pg_dump` once `SUPABASE_DB_URL` is configured).
+
+Summary:
+
+- **Client:** automatic localStorage snapshots; Account → Download / Restore JSON.
+- **Server:** `.github/workflows/backup-supabase.yml` daily → Actions artifacts (30 days).
+- **Required for server dumps:** repository secret `SUPABASE_DB_URL` (Postgres URI). Anon key is not enough.
+
 ## Data-integrity rules this codebase enforces (do not violate these)
 
 - Never call `.clear()` on a Dexie table, and never replace a Supabase pull

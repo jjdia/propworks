@@ -1,0 +1,65 @@
+# Daily (and on-demand) Supabase Postgres dump → GitHub Actions artifact.
+#
+# REQUIRED_SECRET: SUPABASE_DB_URL
+#   Postgres connection URI (with DB password) from Supabase Dashboard →
+#   Project Settings → Database → Connection string (URI).
+#   Session/Direct connection preferred for pg_dump.
+#
+# Existing secrets VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are NOT enough:
+# the anon key cannot dump the database under RLS.
+#
+# Artifacts retain 30 days. Download from the workflow run page.
+# Restore steps: ops/BACKUP.md
+
+name: Backup Supabase
+
+on:
+  schedule:
+    # 09:00 UTC ≈ 05:00 ET (EDT) / 04:00 ET (EST)
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-supabase
+  cancel-in-progress: false
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check REQUIRED_SECRET
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::REQUIRED_SECRET missing: SUPABASE_DB_URL"
+            echo "Add repository secret SUPABASE_DB_URL (Postgres URI with DB password)."
+            echo "Anon key cannot dump the DB. See ops/BACKUP.md."
+            exit 2
+          fi
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Run dump
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          chmod +x ops/supabase-backup.sh
+          ./ops/supabase-backup.sh backup-out
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: propworks-supabase-backup-${{ github.run_id }}
+          path: backup-out/
+          retention-days: 30
+          if-no-files-found: error

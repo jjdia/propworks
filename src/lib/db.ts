@@ -67,6 +67,39 @@ class PropertyWorksDB extends Dexie {
 
 export const db = new PropertyWorksDB();
 
+/** Local-first tables included in rolling + downloadable backups. */
+export const BACKUP_TABLES = [
+  'properties',
+  'rental_units',
+  'tenants',
+  'leases',
+  'rent_charges',
+  'rent_payments',
+  'rent_installments',
+  'expenses',
+  'documents',
+  'contractors',
+  'maintenance_schedules',
+] as const;
+
+export type BackupTableName = typeof BACKUP_TABLES[number];
+
+export interface BackupSnapshot {
+  version: 2;
+  timestamp: string;
+  properties: Property[];
+  rental_units: RentalUnit[];
+  tenants: Tenant[];
+  leases: Lease[];
+  rent_charges: RentCharge[];
+  rent_payments: RentPayment[];
+  rent_installments: RentInstallment[];
+  expenses: Expense[];
+  documents: PropertyDocument[];
+  contractors: Contractor[];
+  maintenance_schedules: MaintenanceSchedule[];
+}
+
 // -----------------------------------------------------------------------
 // Rolling local backup: every mutation also snapshots the full local
 // dataset into localStorage (belt-and-suspenders on top of IndexedDB).
@@ -76,18 +109,27 @@ const BACKUP_KEY = 'propertyworks_backup_v2';
 const BACKUP_HISTORY_KEY = 'propertyworks_backup_v2_history';
 const MAX_BACKUPS = 5;
 
+export async function buildBackupSnapshot(): Promise<BackupSnapshot> {
+  return {
+    version: 2,
+    timestamp: new Date().toISOString(),
+    properties: await db.properties.toArray(),
+    rental_units: await db.rental_units.toArray(),
+    tenants: await db.tenants.toArray(),
+    leases: await db.leases.toArray(),
+    rent_charges: await db.rent_charges.toArray(),
+    rent_payments: await db.rent_payments.toArray(),
+    rent_installments: await db.rent_installments.toArray(),
+    expenses: await db.expenses.toArray(),
+    documents: await db.documents.toArray(),
+    contractors: await db.contractors.toArray(),
+    maintenance_schedules: await db.maintenance_schedules.toArray(),
+  };
+}
+
 export async function writeRollingBackup() {
   try {
-    const snapshot = {
-      timestamp: new Date().toISOString(),
-      properties: await db.properties.toArray(),
-      rental_units: await db.rental_units.toArray(),
-      tenants: await db.tenants.toArray(),
-      leases: await db.leases.toArray(),
-      rent_charges: await db.rent_charges.toArray(),
-      rent_payments: await db.rent_payments.toArray(),
-      expenses: await db.expenses.toArray(),
-    };
+    const snapshot = await buildBackupSnapshot();
     const json = JSON.stringify(snapshot);
     localStorage.setItem(BACKUP_KEY, json);
 
@@ -111,19 +153,41 @@ export function getBackupHistory(): string[] {
   return raw ? JSON.parse(raw) : [];
 }
 
+/** Trigger a browser download of the full Dexie snapshot as JSON. */
+export async function downloadBackupFile() {
+  const snapshot = await buildBackupSnapshot();
+  const json = JSON.stringify(snapshot, null, 2);
+  const stamp = snapshot.timestamp.replace(/[:.]/g, '-');
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `propworks-backup-${stamp}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // Restore from a backup snapshot by MERGING it in (never clearing tables
-// first), so restoring can only add records back, never remove anything
-// that's currently present.
+// first), so restoring can only add/overwrite records by id, never remove
+// anything that's currently present and missing from the snapshot.
 export async function restoreFromBackup(json: string) {
-  const snapshot = JSON.parse(json);
-  const tables = [db.properties, db.rental_units, db.tenants, db.leases, db.rent_charges, db.rent_payments, db.expenses];
+  const snapshot = JSON.parse(json) as Partial<BackupSnapshot> & Record<string, unknown>;
+  const tables = [
+    db.properties, db.rental_units, db.tenants, db.leases,
+    db.rent_charges, db.rent_payments, db.rent_installments, db.expenses,
+    db.documents, db.contractors, db.maintenance_schedules,
+  ];
   await db.transaction('rw', tables, async () => {
-    if (snapshot.properties) await db.properties.bulkPut(snapshot.properties);
-    if (snapshot.rental_units) await db.rental_units.bulkPut(snapshot.rental_units);
-    if (snapshot.tenants) await db.tenants.bulkPut(snapshot.tenants);
-    if (snapshot.leases) await db.leases.bulkPut(snapshot.leases);
-    if (snapshot.rent_charges) await db.rent_charges.bulkPut(snapshot.rent_charges);
-    if (snapshot.rent_payments) await db.rent_payments.bulkPut(snapshot.rent_payments);
-    if (snapshot.expenses) await db.expenses.bulkPut(snapshot.expenses);
+    if (Array.isArray(snapshot.properties)) await db.properties.bulkPut(snapshot.properties as Property[]);
+    if (Array.isArray(snapshot.rental_units)) await db.rental_units.bulkPut(snapshot.rental_units as RentalUnit[]);
+    if (Array.isArray(snapshot.tenants)) await db.tenants.bulkPut(snapshot.tenants as Tenant[]);
+    if (Array.isArray(snapshot.leases)) await db.leases.bulkPut(snapshot.leases as Lease[]);
+    if (Array.isArray(snapshot.rent_charges)) await db.rent_charges.bulkPut(snapshot.rent_charges as RentCharge[]);
+    if (Array.isArray(snapshot.rent_payments)) await db.rent_payments.bulkPut(snapshot.rent_payments as RentPayment[]);
+    if (Array.isArray(snapshot.rent_installments)) await db.rent_installments.bulkPut(snapshot.rent_installments as RentInstallment[]);
+    if (Array.isArray(snapshot.expenses)) await db.expenses.bulkPut(snapshot.expenses as Expense[]);
+    if (Array.isArray(snapshot.documents)) await db.documents.bulkPut(snapshot.documents as PropertyDocument[]);
+    if (Array.isArray(snapshot.contractors)) await db.contractors.bulkPut(snapshot.contractors as Contractor[]);
+    if (Array.isArray(snapshot.maintenance_schedules)) await db.maintenance_schedules.bulkPut(snapshot.maintenance_schedules as MaintenanceSchedule[]);
   });
 }

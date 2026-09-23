@@ -2,3 +2,7 @@ node_modules
 dist
 .env
 *.local
+
+# Local / CI database dumps
+backup-out/
+*.sql.gz
