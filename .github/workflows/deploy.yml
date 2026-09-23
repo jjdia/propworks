@@ -41,3 +41,28 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  verify:
+    name: post-deploy-verify
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify GitHub Pages site is live
+        run: |
+          set -euo pipefail
+          URL="https://jjdia.github.io/propworks/"
+          # Pages can lag a few seconds after deploy-pages reports success.
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            echo "Attempt $i: GET $URL"
+            BODY_FILE="$(mktemp)"
+            HTTP_CODE="$(curl -sS -L -o "$BODY_FILE" -w "%{http_code}" "$URL" || true)"
+            if [ "$HTTP_CODE" = "200" ] && grep -q "PropertyWorks" "$BODY_FILE"; then
+              echo "OK: HTTP $HTTP_CODE and HTML contains PropertyWorks"
+              head -n 20 "$BODY_FILE"
+              exit 0
+            fi
+            echo "Not ready yet (HTTP $HTTP_CODE); sleeping 15s..."
+            sleep 15
+          done
+          echo "FAIL: site did not return 200 with PropertyWorks marker within retries"
+          exit 1
