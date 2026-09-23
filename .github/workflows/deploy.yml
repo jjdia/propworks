@@ -56,24 +56,29 @@ jobs:
         run: |
           set -euo pipefail
           # Pages can lag a few seconds after deploy-pages reports success.
+          # GitHub Pages serves custom 404.html with HTTP 404 for unknown paths.
+          # That is expected for SPA deep links: body is still the app shell.
           check_url() {
             local URL="$1"
             local LABEL="$2"
+            local ALLOW_404="${3:-0}"
             for i in 1 2 3 4 5 6 7 8 9 10; do
               echo "Attempt $i ($LABEL): GET $URL"
               BODY_FILE="$(mktemp)"
               HTTP_CODE="$(curl -sS -L -o "$BODY_FILE" -w "%{http_code}" "$URL" || true)"
-              if [ "$HTTP_CODE" = "200" ] && grep -q "PropertyWorks" "$BODY_FILE"; then
-                echo "OK ($LABEL): HTTP $HTTP_CODE and HTML contains PropertyWorks"
-                head -n 20 "$BODY_FILE"
-                return 0
+              if grep -q "PropertyWorks" "$BODY_FILE"; then
+                if [ "$HTTP_CODE" = "200" ] || { [ "$ALLOW_404" = "1" ] && [ "$HTTP_CODE" = "404" ]; }; then
+                  echo "OK ($LABEL): HTTP $HTTP_CODE and HTML contains PropertyWorks"
+                  head -n 20 "$BODY_FILE"
+                  return 0
+                fi
               fi
               echo "Not ready yet ($LABEL HTTP $HTTP_CODE); sleeping 15s..."
               sleep 15
             done
-            echo "FAIL: $LABEL did not return 200 with PropertyWorks marker within retries"
+            echo "FAIL: $LABEL did not return SPA shell within retries"
             return 1
           }
           check_url "https://jjdia.github.io/propworks/" "home"
-          # Deep link must hit the SPA shell via 404.html fallback (not a hard 404).
-          check_url "https://jjdia.github.io/propworks/admin" "admin deep link"
+          # Deep link: 404.html SPA fallback (HTTP 404 + app shell is success).
+          check_url "https://jjdia.github.io/propworks/admin" "admin deep link" 1
