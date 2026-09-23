@@ -50,7 +50,8 @@ Without a `.env`, the app still runs -- it just stays in local-only mode
    (no trailing slash). After `vite build`, the workflow copies
    `dist/index.html` to `dist/404.html` so deep links like
    `/propworks/admin` serve the SPA shell on GitHub Pages (Pages has no
-   path rewrite). Admin (owner login required):
+   path rewrite; deep links return HTTP 404 with the `404.html` body, which
+   browsers still run as the SPA). Admin (owner login required):
    `https://jjdia.github.io/propworks/admin`.
 
 ## What v1 of the rebuild covers
