@@ -97,7 +97,7 @@ resets or the team is upgraded. Confirm current status before assuming this
 is still the case.
 
 **Two build configs exist:**
-- `vite.config.ts` — GitHub Pages target, base path `/propertyworks/`
+- `vite.config.ts` — GitHub Pages target, base path `/propworks/`
 - `vite.config.netlify.ts` — Netlify target, base path `/`
 
 **Your task:** set up a GitHub repo + GitHub Actions workflow that builds
