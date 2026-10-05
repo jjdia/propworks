@@ -18,6 +18,7 @@ import {
 import { sendNotificationEmail, buildOnboardingEmail } from '../../lib/emailNotify';
 import { useAppStore } from '../../store/useAppStore';
 import type { Profile, Tenant } from '../../lib/types';
+import { APP_VERSION, APP_VERSION_DETAIL } from '../../version';
 import {
   canAccessAdmin,
   canRemovePortalUser,
@@ -293,6 +294,9 @@ export function AdminUsersPage() {
       <div className="flex items-center justify-between gap-2">
         <div>
           <h1 className="text-lg font-semibold">Admin — Users & roles</h1>
+          <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+            {APP_VERSION} — {APP_VERSION_DETAIL}
+          </p>
           <p className="text-xs text-slate-500 mt-0.5">
             Onboard, offboard, and remove portal logins for this portfolio. Roster contacts stay on Tenants / Contractors.
           </p>
