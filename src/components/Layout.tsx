@@ -6,6 +6,7 @@ import { computeOverdueItems, summarizeOverdue } from '../lib/overdue';
 import { maybeShowOverdueNotification } from '../lib/localNotifications';
 import { useAppStore } from '../store/useAppStore';
 import { APP_VERSION } from '../version';
+import { BrandMark } from './BrandMark';
 import type { RentInstallment, RentCharge, Lease, Tenant, RentalUnit, Property } from '../lib/types';
 
 interface NavItem { to: string; label: string; icon: string; badge?: boolean }
@@ -66,11 +67,16 @@ export function Layout() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       <header className="border-b border-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 bg-slate-950/95 backdrop-blur z-10">
-        <div className="flex items-center gap-2">
-          <Link to="/" className="text-lg font-bold tracking-tight hover:text-indigo-300">
-            PropertyWorks
+        <div className="flex items-center gap-2 min-w-0">
+          <Link
+            to="/"
+            className="flex items-center gap-2 min-w-0 text-lg font-bold tracking-tight hover:text-indigo-300"
+            aria-label="PropertyWorks home"
+          >
+            <BrandMark className="h-7 w-7 shrink-0" />
+            <span className="truncate">PropertyWorks</span>
           </Link>
-          <span className="text-[10px] text-slate-500 font-mono">{APP_VERSION}</span>
+          <span className="text-[10px] text-slate-500 font-mono shrink-0">{APP_VERSION}</span>
         </div>
         <div className="text-xs text-slate-400 flex items-center gap-1">
           <span className={`inline-block w-2 h-2 rounded-full ${
