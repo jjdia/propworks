@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import { computeOverdueItems, summarizeOverdue } from '../lib/overdue';
@@ -67,7 +67,9 @@ export function Layout() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       <header className="border-b border-slate-800 px-4 py-3 flex items-center justify-between sticky top-0 bg-slate-950/95 backdrop-blur z-10">
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold tracking-tight">PropertyWorks</span>
+          <Link to="/" className="text-lg font-bold tracking-tight hover:text-indigo-300">
+            PropertyWorks
+          </Link>
           <span className="text-[10px] text-slate-500 font-mono">{APP_VERSION}</span>
         </div>
         <div className="text-xs text-slate-400 flex items-center gap-1">
