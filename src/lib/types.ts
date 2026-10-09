@@ -45,6 +45,9 @@ export interface Tenant extends SyncMeta {
 }
 
 export type LeaseStatus = 'active' | 'ended' | 'draft';
+// 'hra' is kept for LEGACY rows only (leases that stored HRA as the gov
+// program before issue #10). HRA is now only ever the tenant-share payer
+// (tenant_payment_method = 'hra'); the UI offers Section 8 / CityFHEPS only.
 export type SubsidyProgram = 'none' | 'section8' | 'cityfheps' | 'hra';
 export type PaymentFrequency = 'monthly' | 'twice_monthly';
 export type TenantPaymentMethod = 'direct' | 'hra';
@@ -66,6 +69,14 @@ export interface Lease extends SyncMeta {
   // Some tenants pay their portion directly; some have it paid on their
   // behalf through HRA (which also runs on the 15th/30th schedule).
   tenant_payment_method?: TenantPaymentMethod;
+  // How many checks the tenant share arrives in. NULL/undefined = the
+  // payer's default (HRA → twice_monthly on the 15th/30th; tenant paying
+  // directly → monthly on rent_due_day). Deliberately never defaulted.
+  tenant_payment_frequency?: PaymentFrequency | null;
+  // HRA proof (setup 3, gov + HRA). Missing proof only warns, never blocks.
+  hra_case_number?: string | null;
+  hra_approved_on?: string | null; // YYYY-MM-DD
+  hra_proof_document_id?: string | null; // documents.id (no FK on purpose)
   rent_due_day?: number;
   security_deposit?: number;
   status: LeaseStatus;
@@ -82,6 +93,10 @@ export interface RentCharge extends SyncMeta {
   tenant_portion?: number;
   due_date?: string;
   status: ChargeStatus;
+  // Set when Jeff taps "Mark Full" on a gov-setup month (only allowed once
+  // every payer line is fully received). Cleared if a payment is later
+  // reduced and the month drops back to partial.
+  marked_full_at?: string | null;
   notes?: string;
 }
 

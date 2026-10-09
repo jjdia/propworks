@@ -46,7 +46,9 @@ jobs:
             scripts/email-template-test.ts \
             scripts/overdue-test.ts \
             scripts/maintenance-schedule-test.ts \
-            scripts/admin-access-test.ts
+            scripts/admin-access-test.ts \
+            scripts/payer-setup-test.ts \
+            scripts/charge-status-test.ts
           do
             echo "::group::npx tsx $f"
             npx tsx "$f"

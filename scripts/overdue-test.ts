@@ -1,4 +1,6 @@
 import { computeOverdueItems, summarizeOverdue, type OverdueData } from '../src/lib/overdue';
+import { buildInstallments } from '../src/lib/installments';
+import { payerLabel } from '../src/lib/payerSetup';
 import type { Property, RentalUnit, Tenant, Lease, RentCharge, RentInstallment } from '../src/lib/types';
 
 let pass = 0, fail = 0;
@@ -48,6 +50,25 @@ const summary = summarizeOverdue(items);
 check('summary count is 2', summary.count === 2);
 check('summary total is 2000 + 500 = 2500', summary.total === 2500);
 check('summary tenantCount is 1 (same tenant on both)', summary.tenantCount === 1);
+
+// ======================= issue #10: payer setups =======================
+{
+  const l3: Lease = { ...lease, id: 'lease3', subsidy_program: 'section8', government_portion: 3000, tenant_portion: 1000, tenant_payment_method: 'hra' };
+  const c3: RentCharge = { id: 'c3', lease_id: 'lease3', charge_month: '2026-10-01', total_rent: 4000, status: 'partial', ...meta };
+  const i3 = buildInstallments('o1', 'c3', '2026-10-01', l3).map((x, n) => ({ ...x, id: `h${n}`, ...meta }));
+  const base3 = { rentCharges: [c3], leases: [l3], tenants: [tenant], rentalUnits: [unit], properties: [property] };
+  const on20 = computeOverdueItems({ ...base3, installments: i3, today: '2026-10-20' });
+  check('HRA 30th check is NOT overdue on the 20th', !on20.some((x) => x.dueDate === '2026-10-30'));
+  const hra15 = on20.find((x) => x.dueDate === '2026-10-15');
+  check('overdue HRA 15th check carries payer "hra" and labels as HRA (tenant share)', hra15?.payer === 'hra' && payerLabel(hra15!) === 'HRA (tenant share)');
+
+  const l2: Lease = { ...lease, id: 'lease2', subsidy_program: 'section8', government_portion: 3000, tenant_portion: 1000, tenant_payment_method: 'direct', tenant_payment_frequency: 'twice_monthly' };
+  const c2: RentCharge = { id: 'c2', lease_id: 'lease2', charge_month: '2026-10-01', total_rent: 4000, status: 'partial', ...meta };
+  const i2 = buildInstallments('o1', 'c2', '2026-10-01', l2).map((x, n) => ({ ...x, id: `t${n}`, ...meta }));
+  const on10 = computeOverdueItems({ ...base3, rentCharges: [c2], leases: [l2], installments: i2, today: '2026-10-10' });
+  check("tenant's 15th check is NOT overdue on the 10th", !on10.some((x) => x.dueDate === '2026-10-15' && x.portion === 'tenant'));
+  check("tenant's 1st check IS overdue on the 10th", on10.some((x) => x.dueDate === '2026-10-01' && x.payer === 'tenant'));
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -15,8 +15,9 @@ reference/reproducibility and must be applied **in order** on a fresh project.
 | `schema-v6-notifications.sql` | 20260920225523 · notifications_and_broadcasts; 20260920225639 · rent_reminder_cron |
 | `schema-v7-security-hardening.sql` | 20260919171150 · harden_function_search_path; 20260920051941 · revoke_anon_execute_my_portfolio_id; 20260921024046 · security_hardening_invites_and_scoping; 20260921024233 · rent_reminder_cron_auth; 20260921024308 · security_hardening_revoke_anon |
 | `schema-v8-contractors-schedules.sql` | 20260922022615 · contractor_roster_and_scheduled_maintenance |
+| `schema-v9-payer-setups.sql` | issue #10 — see HANDOFF "Payer setups" for live-apply status |
 
-Next free number: **v9**.
+Next free number: **v10**.
 
 ## Verification (2026-10-08)
 
