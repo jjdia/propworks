@@ -7,6 +7,7 @@ import { sendNotificationEmail, buildOnboardingEmail } from '../lib/emailNotify'
 import { TenantFormModal } from '../components/TenantFormModal';
 import { LeaseFormModal } from '../components/LeaseFormModal';
 import type { Tenant, Lease } from '../lib/types';
+import { PAYER_SETUP_LABEL, PROGRAM_LABEL, payerSetupInfo } from '../lib/payerSetup';
 
 export function Tenants() {
   const ownerId = useAppStore((s) => s.ownerId) ?? 'local-owner';
@@ -56,12 +57,22 @@ export function Tenants() {
       <div className="space-y-2">
         {tenants?.map((t) => {
           const lease = leases?.find((l) => l.tenant_id === t.id && l.status === 'active');
+          const info = lease ? payerSetupInfo(lease) : null;
           return (
             <div key={t.id} className="bg-slate-900 border border-slate-800 rounded-xl p-3">
               <div className="flex items-start justify-between">
                 <div>
                   <div className="text-sm font-medium">{t.full_name}</div>
                   <div className="text-xs text-slate-400">{[t.phone, t.email].filter(Boolean).join(' · ')}</div>
+                  {info && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      <span className="text-[10px] uppercase tracking-wide bg-slate-800 rounded px-1.5 py-0.5 text-slate-300">
+                        {PAYER_SETUP_LABEL[info.setup]}{info.program && info.program !== 'hra' ? ` · ${PROGRAM_LABEL[info.program]}` : ''}
+                      </span>
+                      {info.hraProofMissing && <span className="text-[10px] uppercase tracking-wide bg-amber-950 border border-amber-900 rounded px-1.5 py-0.5 text-amber-300">HRA proof missing</span>}
+                      {info.needsReview && <span className="text-[10px] uppercase tracking-wide bg-amber-900 rounded px-1.5 py-0.5 text-amber-200" title={info.reviewReasons.join('; ')}>Review payer setup</span>}
+                    </div>
+                  )}
                 </div>
                 {lease && <span className="font-mono text-sm">${Number(lease.total_monthly_rent).toFixed(2)}/mo</span>}
               </div>

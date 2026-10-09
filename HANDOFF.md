@@ -152,10 +152,16 @@ The scheduled `Backup Supabase` workflow has been failing (it needs the
   Pure logic in `src/lib/payerSetup.ts`, `src/lib/chargeStatus.ts`,
   `src/lib/installments.ts` (`splitEven` odd-cent fix); `rollUpCharge` /
   `markChargeFull` in `mutations.ts`.
-- PR2 (UI + V29) still to do: wire `RentTracking` to `rollUpCharge` +
-  Mark Full button, payer-setup form fields, badges/chips. **Apply v9 to
-  live before merging PR2** — `pushOutbox()` stops on the first rejected
-  upsert.
+- v9 applied to live Supabase 2026-10-08 (confirmed by Nexus with a column
+  check); pre-v9 dump `backups/propworks-live-20261008-210427-pre-v9.dump`.
+- PR2 (UI + **V 29**): payer-setup chooser + HRA proof fields
+  (`PaymentScheduleFields`, form mapping in `src/lib/paymentSchedule.ts`),
+  `/rent` per-payer lines + Partial/Full badge + **Mark Full** (gov setups,
+  confirm step) via `rollUpCharge`/`markChargeFull`, payer labels via
+  `payerLabel` everywhere, setup / "HRA proof missing" / "Review payer
+  setup" chips on Tenants, Backfill stamps `marked_full_at` on bulk-paid gov
+  months. HRA tenant share is locked to 15th/30th in the UI; tenant paying
+  directly can pick 1 check or 1st & 15th. No new migration.
 
 ## Working conventions Jeff has been explicit about
 

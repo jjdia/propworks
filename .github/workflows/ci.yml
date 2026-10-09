@@ -48,7 +48,8 @@ jobs:
             scripts/maintenance-schedule-test.ts \
             scripts/admin-access-test.ts \
             scripts/payer-setup-test.ts \
-            scripts/charge-status-test.ts
+            scripts/charge-status-test.ts \
+            scripts/payment-schedule-test.ts
           do
             echo "::group::npx tsx $f"
             npx tsx "$f"

@@ -1,20 +1,24 @@
 import { useState } from 'react';
-import type { Lease, LeaseStatus, SubsidyProgram, PaymentFrequency, TenantPaymentMethod } from '../lib/types';
-import { saveLease } from '../lib/mutations';
-import { PaymentScheduleFields, type PaymentScheduleValue } from './PaymentScheduleFields';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../lib/db';
+import type { Lease, LeaseStatus } from '../lib/types';
+import { saveLease, saveDocument, blankMeta } from '../lib/mutations';
+import { payerSetupInfo } from '../lib/payerSetup';
+import { PaymentScheduleFields } from './PaymentScheduleFields';
+import { scheduleFromLease, scheduleToLeaseFields, type PaymentScheduleValue } from '../lib/paymentSchedule';
 
 export function LeaseFormModal({ existing, onClose }: { existing: Lease; onClose: () => void }) {
   const [rent, setRent] = useState(String(existing.total_monthly_rent));
   const [dueDay, setDueDay] = useState(String(existing.rent_due_day ?? 1));
   const [leaseStart, setLeaseStart] = useState(existing.lease_start ?? '');
   const [leaseEnd, setLeaseEnd] = useState(existing.lease_end ?? '');
-  const [schedule, setSchedule] = useState<PaymentScheduleValue>({
-    subsidyProgram: (existing.subsidy_program as SubsidyProgram) ?? 'none',
-    govPortion: existing.government_portion ? String(existing.government_portion) : '',
-    govFrequency: (existing.government_payment_frequency as PaymentFrequency) ?? 'monthly',
-    tenantPortion: existing.tenant_portion ? String(existing.tenant_portion) : String(existing.total_monthly_rent),
-    tenantMethod: (existing.tenant_payment_method as TenantPaymentMethod) ?? 'direct',
-  });
+  const [schedule, setSchedule] = useState<PaymentScheduleValue>(() => scheduleFromLease(existing));
+  const review = payerSetupInfo(existing);
+  const unit = useLiveQuery(() => db.rental_units.get(existing.rental_unit_id), [existing.rental_unit_id]);
+  const proofDocs = useLiveQuery(
+    () => db.documents.filter((d) => !d.deleted_at && (d.lease_id === existing.id || d.tenant_id === existing.tenant_id)).toArray(),
+    [existing.id, existing.tenant_id],
+  );
   const [deposit, setDeposit] = useState(existing.security_deposit ? String(existing.security_deposit) : '');
   const [status, setStatus] = useState<LeaseStatus>(existing.status);
   const [saving, setSaving] = useState(false);
@@ -22,17 +26,28 @@ export function LeaseFormModal({ existing, onClose }: { existing: Lease; onClose
   async function handleSave() {
     if (!rent) return;
     setSaving(true);
+    // Proof note first, so the lease never points at a document that
+    // doesn't exist yet (no FK on hra_proof_document_id, by design).
+    let proofId: string | undefined;
+    if (schedule.setup === 'gov_hra' && !schedule.hraProofDocumentId && schedule.hraProofNewTitle.trim() && unit?.property_id) {
+      const doc = await saveDocument({
+        ...blankMeta(existing.owner_id),
+        property_id: unit.property_id,
+        tenant_id: existing.tenant_id,
+        lease_id: existing.id,
+        doc_type: 'other',
+        title: schedule.hraProofNewTitle.trim(),
+        content: `HRA proof${schedule.hraCaseNumber ? ` · case #${schedule.hraCaseNumber.trim()}` : ''}${schedule.hraApprovedOn ? ` · approved ${schedule.hraApprovedOn}` : ''}`,
+      });
+      proofId = doc.id;
+    }
     await saveLease({
       ...existing,
       total_monthly_rent: Number(rent),
       rent_due_day: Number(dueDay) || 1,
       lease_start: leaseStart || undefined,
       lease_end: leaseEnd || undefined,
-      subsidy_program: schedule.subsidyProgram,
-      government_portion: schedule.subsidyProgram !== 'none' && schedule.govPortion ? Number(schedule.govPortion) : undefined,
-      government_payment_frequency: schedule.subsidyProgram === 'hra' ? 'twice_monthly' : schedule.govFrequency,
-      tenant_portion: schedule.tenantPortion ? Number(schedule.tenantPortion) : undefined,
-      tenant_payment_method: schedule.subsidyProgram !== 'none' ? schedule.tenantMethod : 'direct',
+      ...scheduleToLeaseFields(schedule, proofId),
       security_deposit: deposit ? Number(deposit) : undefined,
       status,
     });
@@ -53,7 +68,15 @@ export function LeaseFormModal({ existing, onClose }: { existing: Lease; onClose
           <Field label="Lease end"><input type="date" className={inputCls} value={leaseEnd} onChange={(e) => setLeaseEnd(e.target.value)} /></Field>
         </div>
 
-        <PaymentScheduleFields value={schedule} onChange={setSchedule} />
+        {review.needsReview && (
+          <p className="text-[11px] text-amber-300">Review payer setup: {review.reviewReasons.join('; ')}.</p>
+        )}
+        <PaymentScheduleFields
+          value={schedule}
+          onChange={setSchedule}
+          proofDocuments={(proofDocs ?? []).map((d) => ({ id: d.id, title: d.title }))}
+        />
+        <p className="text-[11px] text-slate-500">Payer changes apply to months created after saving; existing months stay as they are.</p>
 
         <Field label="Security deposit"><input type="number" step="0.01" className={inputCls} value={deposit} onChange={(e) => setDeposit(e.target.value)} /></Field>
         <Field label="Status">
