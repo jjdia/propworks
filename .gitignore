@@ -6,3 +6,7 @@ dist
 # Local / CI database dumps
 backup-out/
 *.sql.gz
+
+# Live DB dumps — never commit
+backups/
+*.dump

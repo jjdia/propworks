@@ -63,11 +63,13 @@ call `db.<table>.put()` directly from a component.
 - Anon/publishable key (safe to embed client-side, RLS does the actual
   protection): `[REDACTED_ANON_KEY]`
 - Org: "Propwoks" (free tier, $0/mo)
-- Migrations live in `supabase/`, must be applied **in order** (schema.sql,
-  schema-v2 through schema-v8 — check the directory for exact current list).
-  All have already been applied to the live project directly via SQL during
-  the chat session — they're in the repo for reference/reproducibility, not
-  because they're pending.
+- Migrations live in `supabase/`, must be applied **in order**: schema.sql,
+  then schema-v2 through schema-v8. All have already been applied to the
+  live project directly via the SQL editor — they're in the repo for
+  reference/reproducibility, not because they're pending. v6–v8 were missing
+  from the repo until 2026-10-08 and were recovered verbatim from live
+  `supabase_migrations.schema_migrations`. See `supabase/MIGRATIONS.md` for
+  the file → live-version map. Next free number: **v9**.
 
 ### Edge Functions (already deployed, live on the Supabase project)
 
