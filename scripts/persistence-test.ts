@@ -91,6 +91,36 @@ async function main() {
 
   db3.close();
 
+  // --- Test 5 (issue #10): new lease/charge fields survive the REAL ------
+  // src/lib/db.ts rolling backup + restore. No Dexie version bump: the new
+  // fields aren't indexed, so they just ride along on the stored objects.
+  {
+    const realDb = await import('../src/lib/db');
+    const { db, writeRollingBackup, getLatestBackup, restoreFromBackup } = realDb;
+    check('Dexie schema still at version 4 (no bump for #10)', db.verno === 4 || (await db.open(), db.verno === 4));
+    const meta = { owner_id: ownerId, created_at: now, updated_at: now, deleted_at: null };
+    await db.leases.put({
+      id: 'lease-hra', rental_unit_id: 'u1', tenant_id: 't1', total_monthly_rent: 4000, status: 'active',
+      subsidy_program: 'section8', government_portion: 3000, tenant_portion: 1000, tenant_payment_method: 'hra',
+      tenant_payment_frequency: 'twice_monthly', hra_case_number: 'CASE-123', hra_approved_on: '2026-09-01',
+      hra_proof_document_id: 'doc-1', ...meta,
+    });
+    await db.rent_charges.put({ id: 'charge-full', lease_id: 'lease-hra', charge_month: '2026-10-01', total_rent: 4000, status: 'paid', marked_full_at: '2026-10-30T12:00:00.000Z', ...meta });
+    await writeRollingBackup();
+    const json = getLatestBackup()!;
+    // Simulate losing the rows locally, then restoring (merge, never clear).
+    await db.leases.delete('lease-hra');
+    await db.rent_charges.delete('charge-full');
+    await restoreFromBackup(json);
+    const l = await db.leases.get('lease-hra');
+    const c = await db.rent_charges.get('charge-full');
+    check('lease HRA fields + tenant_payment_frequency survive backup/restore',
+      l?.tenant_payment_frequency === 'twice_monthly' && l?.hra_case_number === 'CASE-123' && l?.hra_approved_on === '2026-09-01' && l?.hra_proof_document_id === 'doc-1');
+    check('rent_charges.marked_full_at survives backup/restore', c?.marked_full_at === '2026-10-30T12:00:00.000Z');
+    check('restore merged in (earlier properties still present)', (await db.properties.count()) === 2);
+    db.close();
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }

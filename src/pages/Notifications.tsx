@@ -3,8 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import { computeOverdueItems, summarizeOverdue } from '../lib/overdue';
 import { notificationsSupported, requestNotificationPermission } from '../lib/localNotifications';
+import { payerLabel } from '../lib/payerSetup';
 
-const PORTION_LABEL: Record<string, string> = { section8: 'Section 8', cityfheps: 'CityFHEPS', hra: 'HRA', tenant: 'Tenant' };
 
 export function Notifications() {
   const [permission, setPermission] = useState(notificationsSupported() ? Notification.permission : 'unsupported');
@@ -61,7 +61,7 @@ export function Notifications() {
                 </div>
                 <div className="flex items-center justify-between mt-2">
                   <span className="text-[10px] uppercase tracking-wide bg-slate-800 rounded px-1.5 py-0.5 text-slate-300">
-                    {item.portion === 'government' ? PORTION_LABEL[item.payer] : 'Tenant'}
+                    {payerLabel(item)}
                   </span>
                   <span className="text-[11px] text-slate-500">
                     Due {item.dueDate}{item.daysOverdue > 0 ? ` · ${item.daysOverdue} day${item.daysOverdue === 1 ? '' : 's'} overdue` : ' · due today'}

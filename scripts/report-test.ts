@@ -57,5 +57,19 @@ check('June point has the 1500 recorded income', series.find((p) => p.month === 
 check('June point has the 300 expense', series.find((p) => p.month === '2026-06')?.expenses === 300);
 check('a month with no activity is still present with zeros', series.find((p) => p.month === '2026-03')?.income === 0);
 
+// ======================= issue #10: split month income =======================
+{
+  const splitCharge: RentCharge = { id: 'charge-split', lease_id: 'lease1', charge_month: '2026-06-01', total_rent: 4000, government_portion: 3000, tenant_portion: 1000, status: 'paid', marked_full_at: '2026-06-30T00:00:00Z', ...meta };
+  const splitInst: RentInstallment[] = [
+    { id: 's1', rent_charge_id: 'charge-split', portion: 'government', payer: 'section8', amount: 3000, due_date: '2026-06-01', status: 'paid', paid_amount: 3000, ...meta },
+    { id: 's2', rent_charge_id: 'charge-split', portion: 'tenant', payer: 'hra', amount: 500, due_date: '2026-06-15', status: 'paid', paid_amount: 500, ...meta },
+    { id: 's3', rent_charge_id: 'charge-split', portion: 'tenant', payer: 'hra', amount: 500, due_date: '2026-06-30', status: 'paid', paid_amount: 500, ...meta },
+  ];
+  const splitData: ReportData = { ...data, rentCharges: [splitCharge], rentInstallments: splitInst, expenses: [] };
+  const t = computePortfolioTotals(splitData);
+  check('split month (gov + 2 HRA checks): recorded income = 4000', t.recordedIncome === 4000);
+  check('split month: expected rent = 4000, outstanding = 0', t.expectedRent === 4000 && t.outstanding === 0);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -5,6 +5,7 @@ import type {
   Contractor, MaintenanceSchedule,
 } from './types';
 export { buildInstallments } from './installments';
+import { rollUpChargeWith, markChargeFullWith, type ChargeRollupDeps } from './chargeStatus';
 
 // Every create/update in the app should go through one of these helpers.
 // They all do the same three things, in order:
@@ -61,3 +62,19 @@ export async function softDelete(table: MutableTable, id: string) {
   void writeRollingBackup();
 }
 
+
+// ------------------------------------------------- month roll-up (issue #10)
+// Both re-read Dexie at call time, so they always see the installment save
+// that just landed (fixes the old one-edit-behind roll-up in RentTracking).
+const chargeDeps: ChargeRollupDeps = {
+  getCharge: (id) => db.rent_charges.get(id),
+  getInstallments: (chargeId) => db.rent_installments.where('rent_charge_id').equals(chargeId).filter((i) => !i.deleted_at).toArray(),
+  getLease: (id) => db.leases.get(id),
+  saveCharge: saveRentCharge,
+};
+
+/** Recompute and save a month's status from its current installments. */
+export const rollUpCharge = (chargeId: string) => rollUpChargeWith(chargeDeps, chargeId);
+
+/** Mark a month Full. Refuses (ok: false) unless every payer line is fully received. */
+export const markChargeFull = (chargeId: string) => markChargeFullWith(chargeDeps, chargeId, nowIso());

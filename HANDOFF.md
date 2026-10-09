@@ -69,7 +69,7 @@ call `db.<table>.put()` directly from a component.
   reference/reproducibility, not because they're pending. v6–v8 were missing
   from the repo until 2026-10-08 and were recovered verbatim from live
   `supabase_migrations.schema_migrations`. See `supabase/MIGRATIONS.md` for
-  the file → live-version map. Next free number: **v9**.
+  the file → live-version map. Next free number: **v10** (v9 = schema-v9-payer-setups.sql, issue #10).
 
 ### Edge Functions (already deployed, live on the Supabase project)
 
@@ -118,12 +118,44 @@ problem forced the Netlify pivot — ask Jeff if he still wants both.
 
 ## Testing — run before every deploy, no exceptions
 
-Seven pure-logic test suites in `scripts/`, run with `npx tsx scripts/<file>.ts`:
+Pure-logic test suites in `scripts/`, run with `npx tsx scripts/<file>.ts`
+(CI runs the same list from `.github/workflows/ci.yml`):
 `persistence-test.ts`, `installment-test.ts`, `report-test.ts`,
 `lease-template-test.ts`, `email-template-test.ts`, `overdue-test.ts`,
-`maintenance-schedule-test.ts`. All 123 tests pass as of v22. Also run
+`maintenance-schedule-test.ts`, `admin-access-test.ts`, and (issue #10)
+`payer-setup-test.ts`, `charge-status-test.ts`. Also run
 `npx tsc -b` (must be clean) and `npm run build` before considering any
 change done.
+
+## Live DB backups (backup gate)
+
+Jeff's standing rule: before applying ANY migration to live Supabase (and
+before shipping a feature), take a full `pg_dump`, verify it restores, and
+record it here and in the PR description. Dumps live on the build box under
+`backups/` (gitignored — never commit `.dump` files, passwords or
+connection strings).
+
+| When | File | Size | sha256 | Verified | Used for |
+|---|---|---|---|---|---|
+| 2026-10-08 20:54 ET | `/workspace/propworks/backups/propworks-live-20261008-205438.dump` (custom format, pg 17.6) | 492K (502,973 B) | `d265a016239628fb1c77fe606008748cc69646d7e9489d94e52455eb80c7812f` | `pg_restore --list` (831 TOC entries, 21 public tables) + scratch restore into PG17 (row counts: leases 8, rent_charges 86, rent_installments 86, contractors 1, maintenance_schedules 0) | #10 PR0 (v6–v8 recovery) and PR1 (`schema-v9-payer-setups.sql`) |
+
+Note: the DB password was pasted in chat on 2026-10-08; Jeff is rotating it.
+The scheduled `Backup Supabase` workflow has been failing (it needs the
+`SUPABASE_DB_URL` repo secret).
+
+## Payer setups (issue #10) — status
+
+- PR1 (model + logic + tests): `supabase/schema-v9-payer-setups.sql`
+  (additive: `leases.tenant_payment_frequency` [no default — NULL = payer
+  default], `hra_case_number`, `hra_approved_on`, `hra_proof_document_id`
+  [no FK on purpose]; `rent_charges.marked_full_at`). No Dexie version bump.
+  Pure logic in `src/lib/payerSetup.ts`, `src/lib/chargeStatus.ts`,
+  `src/lib/installments.ts` (`splitEven` odd-cent fix); `rollUpCharge` /
+  `markChargeFull` in `mutations.ts`.
+- PR2 (UI + V29) still to do: wire `RentTracking` to `rollUpCharge` +
+  Mark Full button, payer-setup form fields, badges/chips. **Apply v9 to
+  live before merging PR2** — `pushOutbox()` stops on the first rejected
+  upsert.
 
 ## Working conventions Jeff has been explicit about
 

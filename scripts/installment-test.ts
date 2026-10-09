@@ -1,4 +1,4 @@
-import { buildInstallments } from '../src/lib/installments';
+import { buildInstallments, splitEven } from '../src/lib/installments';
 import type { Lease } from '../src/lib/types';
 
 let pass = 0, fail = 0;
@@ -92,6 +92,66 @@ function baseLease(overrides: Partial<Lease>): Lease {
   const unknownMode = buildInstallments('owner-1', 'charge-9', '2026-03-01', lease, 'unknown');
   check('due-mode installment has no paid_date', dueMode[0].paid_date === undefined);
   check('unknown-mode installment has no paid_date', unknownMode[0].paid_date === undefined);
+}
+
+// ======================= issue #10: payer setups =======================
+const sum = (xs: { amount: number }[]) => Math.round(xs.reduce((s, i) => s + i.amount * 100, 0)) / 100;
+const days = (xs: { due_date: string }[]) => xs.map((i) => i.due_date.slice(8)).join(',');
+
+// Setup 1 — self-pay: one check on rent_due_day
+{
+  const inst = buildInstallments('owner-1', 'c', '2026-10-01', baseLease({ subsidy_program: 'none', tenant_portion: 2000, tenant_payment_method: 'direct' }));
+  check('setup 1 self-pay → 1 tenant check on due day (5th)', inst.length === 1 && inst[0].payer === 'tenant' && days(inst) === '05');
+}
+// Setup 2 — gov + tenant: default 1 check; twice → 1st & 15th
+{
+  const l = baseLease({ subsidy_program: 'section8', government_portion: 3000, tenant_portion: 1000, tenant_payment_method: 'direct' });
+  const one = buildInstallments('owner-1', 'c', '2026-10-01', l).filter((i) => i.portion === 'tenant');
+  check('setup 2 default (null freq) → 1 tenant check on due day', one.length === 1 && days(one) === '05' && one[0].payer === 'tenant');
+  const two = buildInstallments('owner-1', 'c', '2026-10-01', { ...l, tenant_payment_frequency: 'twice_monthly' }).filter((i) => i.portion === 'tenant');
+  check('setup 2 twice_monthly → tenant checks on 1st & 15th', two.length === 2 && days(two) === '01,15' && two.every((i) => i.payer === 'tenant'));
+  check('setup 2 twice_monthly sums to tenant_portion', sum(two) === 1000);
+}
+// Setup 3 — gov + HRA: default 2 checks 15th/30th; monthly → 1
+{
+  const l = baseLease({ subsidy_program: 'cityfheps', government_portion: 3000, tenant_portion: 1000, tenant_payment_method: 'hra' });
+  const hra = buildInstallments('owner-1', 'c', '2026-10-01', l).filter((i) => i.portion === 'tenant');
+  check('setup 3 default (null freq) → HRA 15th & 30th', hra.length === 2 && days(hra) === '15,30' && hra.every((i) => i.payer === 'hra'));
+  const hraTwice = buildInstallments('owner-1', 'c', '2026-10-01', { ...l, tenant_payment_frequency: 'twice_monthly' }).filter((i) => i.portion === 'tenant');
+  check('setup 3 explicit twice_monthly → HRA 15th & 30th (not 1st/15th)', days(hraTwice) === '15,30');
+  const hraOne = buildInstallments('owner-1', 'c', '2026-10-01', { ...l, tenant_payment_frequency: 'monthly' }).filter((i) => i.portion === 'tenant');
+  check('setup 3 monthly → one HRA check for the whole share', hraOne.length === 1 && hraOne[0].payer === 'hra' && hraOne[0].amount === 1000);
+  const feb = buildInstallments('owner-1', 'c', '2026-02-01', l).filter((i) => i.portion === 'tenant');
+  check('setup 3 Feb: HRA "30th" moves to Feb 28', days(feb) === '15,28');
+}
+// Null frequency output is identical to the pre-#10 builder for existing lease shapes
+{
+  const hraLease = baseLease({ subsidy_program: 'section8', government_portion: 1500, tenant_portion: 500, tenant_payment_method: 'hra' });
+  const inst = buildInstallments('owner-1', 'c', '2026-10-01', hraLease);
+  check('null freq HRA lease unchanged: gov 1 on 5th + HRA 250/250 on 15th/30th',
+    inst.length === 3 && inst[0].amount === 1500 && days(inst) === '05,15,30' && inst[1].amount === 250 && inst[2].amount === 250);
+  const direct = buildInstallments('owner-1', 'c', '2026-10-01', baseLease({ subsidy_program: 'section8', government_portion: 1500, tenant_portion: 500, tenant_payment_method: 'direct' }));
+  check('null freq direct lease unchanged: gov + tenant both on 5th', direct.length === 2 && days(direct) === '05,05');
+}
+// Legacy hra-as-gov still generates its 15th/30th gov installments
+{
+  const inst = buildInstallments('owner-1', 'c', '2026-10-01', baseLease({ subsidy_program: 'hra', government_portion: 1200, tenant_portion: 300, tenant_payment_method: 'direct' }));
+  const gov = inst.filter((i) => i.portion === 'government');
+  check('legacy hra-as-gov still generates 2 gov checks on 15th/30th', gov.length === 2 && days(gov) === '15,30' && gov.every((i) => i.payer === 'hra'));
+}
+// Free-text legacy program normalised for the payer tag
+{
+  const inst = buildInstallments('owner-1', 'c', '2026-10-01', baseLease({ subsidy_program: 'Section 8' as never, government_portion: 1000, tenant_portion: 500 }));
+  check("free-text 'Section 8' gov installment gets payer 'section8'", inst[0].payer === 'section8');
+}
+// Odd-cent split fix
+{
+  check('splitEven(1000.01) = [500.01, 500.00]', JSON.stringify(splitEven(1000.01)) === '[500.01,500]');
+  check('splitEven(1234.57) sums exactly', Math.round((splitEven(1234.57)[0] + splitEven(1234.57)[1]) * 100) === 123457);
+  const l = baseLease({ subsidy_program: 'cityfheps', government_portion: 1000.01, government_payment_frequency: 'twice_monthly', tenant_portion: 1234.57, tenant_payment_method: 'hra' });
+  const inst = buildInstallments('owner-1', 'c', '2026-10-01', l);
+  check('$1,000.01 gov split adds up exactly (was $1,000.02)', sum(inst.filter((i) => i.portion === 'government')) === 1000.01);
+  check('$1,234.57 HRA split adds up exactly', sum(inst.filter((i) => i.portion === 'tenant')) === 1234.57);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
