@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
-import { saveRentCharge, saveRentInstallment, buildInstallments, blankMeta } from '../lib/mutations';
+import { saveRentCharge, saveRentInstallment, buildInstallments, blankMeta, rollUpCharge, markChargeFull } from '../lib/mutations';
 import { useAppStore } from '../store/useAppStore';
 import { LeaseQuickAddModal } from '../components/LeaseQuickAddModal';
 import { BackfillModal } from '../components/BackfillModal';
 import { InstallmentEditModal } from '../components/InstallmentEditModal';
-import type { InstallmentStatus, RentInstallment } from '../lib/types';
+import type { ChargeStatus, InstallmentStatus, RentInstallment } from '../lib/types';
+import { PAYER_SETUP_LABEL, PROGRAM_LABEL, payerLabel, payerSetupInfo } from '../lib/payerSetup';
+import { deriveChargeStatus, fmtMoney } from '../lib/chargeStatus';
 
 const INSTALLMENT_STATUS_COLOR: Record<InstallmentStatus, string> = {
   unknown: 'bg-slate-700 text-slate-200',
@@ -16,8 +18,12 @@ const INSTALLMENT_STATUS_COLOR: Record<InstallmentStatus, string> = {
   partial: 'bg-sky-900 text-sky-200',
 };
 
-const PAYER_LABEL: Record<string, string> = {
-  section8: 'Section 8', cityfheps: 'CityFHEPS', hra: 'HRA', tenant: 'Tenant', none: '—',
+const CHARGE_BADGE_COLOR: Record<ChargeStatus, string> = {
+  unknown: 'bg-slate-700 text-slate-200',
+  due: 'bg-amber-900 text-amber-200',
+  paid: 'bg-emerald-900 text-emerald-200',
+  late: 'bg-rose-900 text-rose-200',
+  partial: 'bg-sky-900 text-sky-200',
 };
 
 function shiftMonth(month: string, delta: number): string {
@@ -33,6 +39,9 @@ export function RentTracking() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBackfillModal, setShowBackfillModal] = useState(false);
   const [editingInstallment, setEditingInstallment] = useState<RentInstallment | null>(null);
+  const [confirmFullId, setConfirmFullId] = useState<string | null>(null);
+  const [markError, setMarkError] = useState<{ chargeId: string; reason: string } | null>(null);
+  const [marking, setMarking] = useState(false);
   const [monthKey, setMonthKey] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const currentMonth = `${monthKey}-01`;
 
@@ -75,13 +84,15 @@ export function RentTracking() {
     return charge;
   }
 
-  async function rollUpChargeStatus(chargeId: string) {
-    const siblings = installments?.filter((i) => i.rent_charge_id === chargeId) ?? [];
-    const charge = charges?.find((c) => c.id === chargeId);
-    if (!charge || siblings.length === 0) return;
-    const allPaid = siblings.every((i) => i.status === 'paid');
-    const anyPaid = siblings.some((i) => i.status === 'paid');
-    await saveRentCharge({ ...charge, status: allPaid ? 'paid' : anyPaid ? 'partial' : charge.status });
+  // Mark Full re-reads Dexie and refuses unless every payer line is fully
+  // received (no early Full). Only offered on gov setups; self-pay auto-Fulls.
+  async function handleMarkFull(chargeId: string) {
+    setMarking(true);
+    setMarkError(null);
+    const r = await markChargeFull(chargeId);
+    setMarking(false);
+    setConfirmFullId(null);
+    if (!r.ok) setMarkError({ chargeId, reason: r.reason });
   }
 
   const isCurrentMonth = monthKey === new Date().toISOString().slice(0, 7);
@@ -114,19 +125,32 @@ export function RentTracking() {
         {leases?.map((lease) => {
           const charge = charges?.find((c) => c.lease_id === lease.id);
           const leaseInstallments = charge ? (installments?.filter((i) => i.rent_charge_id === charge.id) ?? []) : [];
+          const info = payerSetupInfo(lease);
+          const roll = charge ? deriveChargeStatus(charge, leaseInstallments, info.setup) : null;
           return (
             <div key={lease.id} className="bg-slate-900 border border-slate-800 rounded-xl p-3">
               <div className="flex items-start justify-between">
                 <div>
                   <div className="text-sm font-medium">{tenantName(lease.tenant_id)}</div>
                   <div className="text-xs text-slate-400">{propertyName(lease.rental_unit_id)}</div>
-                  {lease.subsidy_program && lease.subsidy_program !== 'none' && (
-                    <span className="inline-block mt-1 text-[10px] uppercase tracking-wide bg-slate-800 rounded px-1.5 py-0.5 text-slate-300">
-                      {PAYER_LABEL[lease.subsidy_program]}
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    <span className="text-[10px] uppercase tracking-wide bg-slate-800 rounded px-1.5 py-0.5 text-slate-300">
+                      {PAYER_SETUP_LABEL[info.setup]}{info.program && info.program !== 'hra' ? ` · ${PROGRAM_LABEL[info.program]}` : ''}
                     </span>
+                    {info.needsReview && <span className="text-[10px] uppercase tracking-wide bg-amber-900 rounded px-1.5 py-0.5 text-amber-200" title={info.reviewReasons.join('; ')}>Review payer setup</span>}
+                    {info.hraProofMissing && <span className="text-[10px] uppercase tracking-wide bg-amber-950 border border-amber-900 rounded px-1.5 py-0.5 text-amber-300">HRA proof missing</span>}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="font-mono text-sm">${Number(lease.total_monthly_rent).toFixed(2)}</span>
+                  {roll && (
+                    <div className="mt-1">
+                      <span className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 ${roll.readyForFull ? 'bg-indigo-900 text-indigo-200' : CHARGE_BADGE_COLOR[roll.status]}`}>
+                        {roll.readyForFull ? 'Ready for Full' : roll.displayStatus}
+                      </span>
+                    </div>
                   )}
                 </div>
-                <span className="font-mono text-sm">${Number(lease.total_monthly_rent).toFixed(2)}</span>
               </div>
 
               {!charge ? (
@@ -136,6 +160,25 @@ export function RentTracking() {
               ) : (
                 <div className="mt-3 pt-3 border-t border-slate-800 space-y-1.5">
                   {leaseInstallments.length === 0 && <p className="text-xs text-slate-500">No payment schedule on this lease.</p>}
+                  {roll && roll.lines.length > 0 && (
+                    <div className="space-y-0.5 pb-1">
+                      {roll.lines.map((l) => (
+                        <div key={l.key} className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400">{l.label}</span>
+                          <span className={l.met ? 'text-emerald-300 font-mono' : 'text-slate-300 font-mono'}>
+                            {fmtMoney(l.received)} / {fmtMoney(l.expected)}{l.met ? ' ✓' : ''}
+                          </span>
+                        </div>
+                      ))}
+                      {roll.status === 'partial' && !roll.readyForFull && roll.owing.length > 0 && (
+                        <p className="text-[11px] text-sky-300">{roll.summary}</p>
+                      )}
+                      {roll.credit > 0 && <p className="text-[11px] text-emerald-300">Credit {fmtMoney(roll.credit)} (display only)</p>}
+                      {roll.isFull && charge.marked_full_at && (
+                        <p className="text-[11px] text-slate-500">Marked Full {new Date(charge.marked_full_at).toLocaleDateString()}</p>
+                      )}
+                    </div>
+                  )}
                   {leaseInstallments
                     .sort((a, b) => a.due_date.localeCompare(b.due_date))
                     .map((inst) => (
@@ -146,17 +189,40 @@ export function RentTracking() {
                       >
                         <div>
                           <div className="text-xs">
-                            <span className="text-slate-300">{inst.portion === 'government' ? PAYER_LABEL[inst.payer] : 'Tenant'}</span>
-                            {inst.payer === 'hra' && inst.portion === 'tenant' && <span className="text-slate-500"> (via HRA)</span>}
+                            <span className="text-slate-300">{payerLabel(inst)}</span>
                           </div>
                           <div className="text-[11px] text-slate-500">
                             Due {inst.due_date} · ${Number(inst.amount).toFixed(2)}
-                            {inst.status === 'paid' && inst.paid_date && ` · paid ${inst.paid_date}`}
+                            {(inst.status === 'paid' || inst.status === 'partial') && inst.paid_date && ` · paid ${inst.paid_date}`}
+                            {(inst.status === 'paid' || inst.status === 'partial') && inst.paid_amount != null && Number(inst.paid_amount) !== Number(inst.amount) && ` (${fmtMoney(Number(inst.paid_amount))})`}
                           </div>
                         </div>
                         <span className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 ${INSTALLMENT_STATUS_COLOR[inst.status]}`}>{inst.status}</span>
                       </button>
                     ))}
+                  {roll && info.setup !== 'self_pay' && !roll.isFull && roll.lines.length > 0 && (
+                    confirmFullId === charge.id ? (
+                      <div className="bg-slate-800/60 rounded-lg p-2 space-y-2">
+                        <p className="text-xs text-slate-300">Mark this month Full? Every payer line has been received ({fmtMoney(roll.received)} of {fmtMoney(roll.expected)}).</p>
+                        <div className="flex gap-2">
+                          <button onClick={() => setConfirmFullId(null)} className="flex-1 rounded-md bg-slate-800 hover:bg-slate-700 py-1.5 text-xs">Cancel</button>
+                          <button onClick={() => handleMarkFull(charge.id)} disabled={marking} className="flex-1 rounded-md bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 py-1.5 text-xs font-medium">
+                            {marking ? 'Saving…' : 'Confirm Full'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setMarkError(null); setConfirmFullId(charge.id); }}
+                        disabled={!roll.readyForFull}
+                        title={roll.readyForFull ? 'Every payer line received' : 'Available once every payer line is fully received'}
+                        className="w-full rounded-md bg-emerald-800 hover:bg-emerald-700 disabled:bg-slate-800 disabled:text-slate-500 py-1.5 text-xs font-medium"
+                      >
+                        Mark Full
+                      </button>
+                    )
+                  )}
+                  {markError?.chargeId === charge.id && <p className="text-[11px] text-rose-400">{markError.reason}</p>}
                 </div>
               )}
             </div>
@@ -170,7 +236,7 @@ export function RentTracking() {
         <InstallmentEditModal
           installment={editingInstallment}
           onClose={() => setEditingInstallment(null)}
-          onSaved={() => { rollUpChargeStatus(editingInstallment.rent_charge_id); setEditingInstallment(null); }}
+          onSaved={() => { void rollUpCharge(editingInstallment.rent_charge_id); setEditingInstallment(null); }}
         />
       )}
     </div>

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { RentInstallment, InstallmentStatus } from '../lib/types';
 import { saveRentInstallment } from '../lib/mutations';
+import { payerLabel } from '../lib/payerSetup';
+import { fmtMoney, receivedOn } from '../lib/chargeStatus';
 
 export function InstallmentEditModal({ installment, onClose, onSaved }: {
   installment: RentInstallment; onClose: () => void; onSaved: () => void;
@@ -9,6 +11,9 @@ export function InstallmentEditModal({ installment, onClose, onSaved }: {
   const [paidDate, setPaidDate] = useState(installment.paid_date ?? new Date().toISOString().slice(0, 10));
   const [paidAmount, setPaidAmount] = useState(String(installment.paid_amount ?? installment.amount));
   const [saving, setSaving] = useState(false);
+  const counts = status === 'paid' || status === 'partial';
+  const typedReceived = counts ? receivedOn({ status, amount: installment.amount, paid_amount: paidAmount === '' ? 0 : Number(paidAmount) }) : 0;
+  const remaining = Math.round((Number(installment.amount) - typedReceived) * 100) / 100;
 
   async function handleSave() {
     setSaving(true);
@@ -25,8 +30,10 @@ export function InstallmentEditModal({ installment, onClose, onSaved }: {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-20">
       <div className="bg-slate-900 border border-slate-800 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 space-y-3">
-        <h2 className="text-lg font-semibold">Update payment</h2>
-        <p className="text-xs text-slate-400">Due {installment.due_date} · ${Number(installment.amount).toFixed(2)}</p>
+        <h2 className="text-lg font-semibold">Update payment · {payerLabel(installment)}</h2>
+        <p className="text-xs text-slate-400">
+          Due {installment.due_date} · {fmtMoney(Number(installment.amount))} expected · currently received {fmtMoney(receivedOn(installment))}
+        </p>
 
         <Field label="Status">
           <select className={inputCls} value={status} onChange={(e) => setStatus(e.target.value as InstallmentStatus)}>
@@ -44,6 +51,12 @@ export function InstallmentEditModal({ installment, onClose, onSaved }: {
             <Field label="Amount paid"><input type="number" step="0.01" className={inputCls} value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} /></Field>
           </div>
         )}
+
+        <p className={`text-xs ${remaining > 0 ? 'text-sky-300' : remaining < 0 ? 'text-emerald-300' : 'text-slate-400'}`}>
+          {remaining > 0 && `Remaining on this check after save: ${fmtMoney(remaining)}${status === 'paid' && counts ? ' — still counts as owed (amounts, not labels)' : ''}`}
+          {remaining === 0 && 'This check is fully received.'}
+          {remaining < 0 && `Overpaid by ${fmtMoney(-remaining)} (shows as credit on the month)`}
+        </p>
 
         <div className="flex gap-2 pt-2">
           <button onClick={onClose} className="flex-1 rounded-md bg-slate-800 hover:bg-slate-700 py-2 text-sm">Cancel</button>

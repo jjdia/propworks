@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
-import { saveRentalUnit, saveTenant, saveLease, saveRentCharge, saveRentInstallment, buildInstallments, blankMeta } from '../lib/mutations';
+import { saveRentalUnit, saveTenant, saveLease, saveRentCharge, saveRentInstallment, saveDocument, buildInstallments, blankMeta } from '../lib/mutations';
 import { useAppStore } from '../store/useAppStore';
-import { PaymentScheduleFields, type PaymentScheduleValue } from './PaymentScheduleFields';
+import { PaymentScheduleFields } from './PaymentScheduleFields';
+import { BLANK_SCHEDULE, scheduleToLeaseFields, type PaymentScheduleValue } from '../lib/paymentSchedule';
 import type { RentalUnit } from '../lib/types';
 
 const NEW_UNIT = '__new__';
@@ -35,9 +36,7 @@ export function LeaseQuickAddModal({ onClose }: { onClose: () => void }) {
   const [rent, setRent] = useState('');
   const [dueDay, setDueDay] = useState('1');
   const [leaseStart, setLeaseStart] = useState(new Date().toISOString().slice(0, 10));
-  const [schedule, setSchedule] = useState<PaymentScheduleValue>({
-    subsidyProgram: 'none', govPortion: '', govFrequency: 'monthly', tenantPortion: '', tenantMethod: 'direct',
-  });
+  const [schedule, setSchedule] = useState<PaymentScheduleValue>(BLANK_SCHEDULE);
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -58,17 +57,29 @@ export function LeaseQuickAddModal({ onClose }: { onClose: () => void }) {
     });
 
     const tenantPortionValue = schedule.tenantPortion ? Number(schedule.tenantPortion) : Number(rent);
+    const leaseMeta = blankMeta(ownerId);
+    // Proof note before the lease (no FK on hra_proof_document_id, by design).
+    let proofId: string | undefined;
+    if (schedule.setup === 'gov_hra' && schedule.hraProofNewTitle.trim()) {
+      const doc = await saveDocument({
+        ...blankMeta(ownerId),
+        property_id: effectivePropertyId,
+        tenant_id: tenant.id,
+        lease_id: leaseMeta.id,
+        doc_type: 'other',
+        title: schedule.hraProofNewTitle.trim(),
+        content: `HRA proof${schedule.hraCaseNumber ? ` · case #${schedule.hraCaseNumber.trim()}` : ''}${schedule.hraApprovedOn ? ` · approved ${schedule.hraApprovedOn}` : ''}`,
+      });
+      proofId = doc.id;
+    }
     const lease = await saveLease({
-      ...blankMeta(ownerId),
+      ...leaseMeta,
       rental_unit_id: unit.id,
       tenant_id: tenant.id,
       lease_start: leaseStart,
       total_monthly_rent: Number(rent),
-      subsidy_program: schedule.subsidyProgram,
-      government_portion: schedule.subsidyProgram !== 'none' && schedule.govPortion ? Number(schedule.govPortion) : undefined,
-      government_payment_frequency: schedule.subsidyProgram === 'hra' ? 'twice_monthly' : schedule.govFrequency,
+      ...scheduleToLeaseFields(schedule, proofId),
       tenant_portion: tenantPortionValue,
-      tenant_payment_method: schedule.subsidyProgram !== 'none' ? schedule.tenantMethod : 'direct',
       rent_due_day: Number(dueDay) || 1,
       status: 'active',
     });

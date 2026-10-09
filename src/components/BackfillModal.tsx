@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import { saveRentCharge, saveRentInstallment, buildInstallments, blankMeta } from '../lib/mutations';
 import { useAppStore } from '../store/useAppStore';
+import { payerSetup } from '../lib/payerSetup';
 
 // Historical backfill: generate one rent_charge (+ its installments) per
 // month in the chosen range, for however many leases are selected at once.
@@ -59,6 +60,7 @@ export function BackfillModal({ onClose }: { onClose: () => void }) {
     setSaving(true);
     let created = 0, skipped = 0;
     const months = monthsBetween(`${startMonth}-01`, `${endMonth}-01`);
+    const stampedAt = new Date().toISOString();
 
     for (const leaseId of selectedLeaseIds) {
       const lease = leases?.find((l) => l.id === leaseId);
@@ -74,6 +76,9 @@ export function BackfillModal({ onClose }: { onClose: () => void }) {
           government_portion: lease.government_portion,
           tenant_portion: lease.tenant_portion,
           status,
+          // Bulk "paid" on a gov setup = Jeff vouching every check came in,
+          // so stamp it as Marked Full (self-pay auto-Fulls, no stamp).
+          marked_full_at: status === 'paid' && payerSetup(lease) !== 'self_pay' ? stampedAt : null,
         });
         for (const installment of buildInstallments(ownerId, charge.id, chargeMonth, lease, status)) {
           await saveRentInstallment({ ...blankMeta(ownerId), ...installment });
