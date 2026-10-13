@@ -10,6 +10,7 @@ import { RecoveryBoundary } from './components/RecoveryBoundary';
 import { Dashboard } from './pages/Dashboard';
 import { Properties } from './pages/Properties';
 import { RentTracking } from './pages/RentTracking';
+import { Triage } from './pages/Triage';
 import { Expenses } from './pages/Expenses';
 import { Tenants } from './pages/Tenants';
 import { Contractors } from './pages/Contractors';
@@ -152,6 +153,7 @@ export default function App() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/properties" element={<Properties />} />
                 <Route path="/rent" element={<RentTracking />} />
+                <Route path="/triage" element={<Triage />} />
                 <Route path="/expenses" element={<Expenses />} />
                 <Route path="/tenants" element={<Tenants />} />
                 <Route path="/contractors" element={<Contractors />} />
