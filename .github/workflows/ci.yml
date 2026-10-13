@@ -58,3 +58,10 @@ jobs:
             npx tsx "$f"
             echo "::endgroup::"
           done
+
+      - name: MCP server (read-only) tests
+        working-directory: mcp
+        run: |
+          npm ci
+          npm run typecheck
+          npm test

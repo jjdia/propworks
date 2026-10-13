@@ -1,0 +1,22 @@
+{
+  "name": "propworks-mcp",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Read-only local stdio MCP server for a PropWorks owner's portfolio (issue #17).",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "test": "tsx test/handlers-test.ts && tsx test/readonly-test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@supabase/supabase-js": "^2.117.3",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}
