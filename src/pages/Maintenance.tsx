@@ -11,6 +11,7 @@ import {
 } from '../lib/maintenance';
 import { AddMaintenanceRequestModal } from '../components/AddMaintenanceRequestModal';
 import { ScheduleFormModal } from '../components/ScheduleFormModal';
+import { HireProLink } from '../components/HireProLink';
 import type { MaintenanceRequest, JobBid, JobCompletion, RequestStatus, MaintenanceSchedule } from '../lib/types';
 
 const TABS = ['submitted', 'approved_for_bidding', 'awarded', 'completed', 'scheduled'] as const;
@@ -172,6 +173,9 @@ export function Maintenance() {
                 </div>
                 {r.description && <p className="text-xs text-slate-400 mt-1">{r.description}</p>}
                 <p className="text-[11px] text-slate-500 mt-1">{r.permission_to_enter ? 'OK to enter without tenant present' : 'Tenant must be present'}</p>
+                {r.status !== 'closed' && r.status !== 'rejected' && (
+                  <HireProLink request={r} property={properties?.find((p) => p.id === r.property_id)} />
+                )}
 
                 <div className="flex gap-2 mt-2">
                   {r.status === 'submitted' && (
