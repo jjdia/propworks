@@ -10,3 +10,6 @@ backup-out/
 # Live DB dumps — never commit
 backups/
 *.dump
+
+# Copied from node_modules by scripts/copy-ocr-assets.mjs
+public/ocr/

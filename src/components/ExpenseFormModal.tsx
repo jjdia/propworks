@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
-import { saveExpense, blankMeta } from '../lib/mutations';
+import { saveExpense, saveDocument, blankMeta } from '../lib/mutations';
+import { DocImport, Suggestion } from './DocImport';
+import { parseReceiptText, type ReceiptSuggestions } from '../lib/docParse';
 import { useAppStore } from '../store/useAppStore';
 import { EXPENSE_CATEGORIES, type PaidBy, type Frequency, type Expense } from '../lib/types';
 
@@ -18,6 +20,9 @@ export function ExpenseFormModal({ existing, onClose }: { existing?: Expense; on
   const [amount, setAmount] = useState(existing ? String(existing.amount) : '');
   const [description, setDescription] = useState(existing?.description ?? '');
   const [saving, setSaving] = useState(false);
+  const [sugg, setSugg] = useState<ReceiptSuggestions | null>(null);
+  const [scan, setScan] = useState<{ name: string; text: string } | null>(null);
+  const [keepText, setKeepText] = useState(false);
 
   const effectivePropertyId = propertyId || properties?.[0]?.id || '';
 
@@ -25,6 +30,15 @@ export function ExpenseFormModal({ existing, onClose }: { existing?: Expense; on
     if (!effectivePropertyId || !amount) return;
     setSaving(true);
     const base = existing ?? blankMeta(ownerId);
+    if (keepText && scan) {
+      await saveDocument({
+        ...blankMeta(ownerId),
+        property_id: effectivePropertyId,
+        doc_type: 'receipt',
+        title: `${vendor.trim() || 'Receipt'} ${date} — ${scan.name}`,
+        content: scan.text,
+      });
+    }
     await saveExpense({
       ...base,
       property_id: effectivePropertyId,
@@ -50,6 +64,22 @@ export function ExpenseFormModal({ existing, onClose }: { existing?: Expense; on
           <p className="text-sm text-amber-300">Add a property first before logging expenses.</p>
         ) : (
           <>
+            <DocImport label="Scan receipt / bill" accept="image/*,application/pdf" onText={(text, file) => { setSugg(parseReceiptText(text)); setScan({ name: file.name, text }); }} />
+            {sugg && (
+              <div className="rounded-lg border border-indigo-800 bg-slate-950 p-2 space-y-1">
+                <div className="flex justify-between text-xs font-medium"><span>Suggested from {scan?.name}</span>
+                  <button type="button" className="rounded bg-indigo-600 px-1.5 py-0.5" onClick={() => {
+                    if (sugg.amount) setAmount(String(sugg.amount));
+                    if (sugg.date) setDate(sugg.date);
+                    if (sugg.vendor) setVendor(sugg.vendor);
+                  }}>Use all</button></div>
+                {sugg.amount && <Suggestion label="Amount" value={`$${sugg.amount}`} onUse={() => setAmount(String(sugg.amount))} />}
+                {sugg.date && <Suggestion label="Date" value={sugg.date} onUse={() => setDate(sugg.date!)} />}
+                {sugg.vendor && <Suggestion label="Vendor" value={sugg.vendor} onUse={() => setVendor(sugg.vendor!)} />}
+                {!sugg.amount && !sugg.date && !sugg.vendor && <p className="text-xs text-amber-300">Couldn't read amount/date/vendor.</p>}
+                <label className="flex items-center gap-1 text-[11px] text-slate-400"><input type="checkbox" checked={keepText} onChange={(e) => setKeepText(e.target.checked)} /> Also save the scanned text to Documents (receipt) when I tap Save</label>
+              </div>
+            )}
             <Field label="Property">
               <select className={inputCls} value={effectivePropertyId} onChange={(e) => setPropertyId(e.target.value)}>
                 {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
