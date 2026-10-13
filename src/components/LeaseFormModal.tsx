@@ -5,6 +5,8 @@ import type { Lease, LeaseStatus } from '../lib/types';
 import { saveLease, saveDocument, blankMeta } from '../lib/mutations';
 import { payerSetupInfo } from '../lib/payerSetup';
 import { PaymentScheduleFields } from './PaymentScheduleFields';
+import { DocImport, Suggestion } from './DocImport';
+import { parseLeaseText, type LeaseSuggestions } from '../lib/docParse';
 import { scheduleFromLease, scheduleToLeaseFields, type PaymentScheduleValue } from '../lib/paymentSchedule';
 
 export function LeaseFormModal({ existing, onClose }: { existing: Lease; onClose: () => void }) {
@@ -22,6 +24,26 @@ export function LeaseFormModal({ existing, onClose }: { existing: Lease; onClose
   const [deposit, setDeposit] = useState(existing.security_deposit ? String(existing.security_deposit) : '');
   const [status, setStatus] = useState<LeaseStatus>(existing.status);
   const [saving, setSaving] = useState(false);
+  const [sugg, setSugg] = useState<LeaseSuggestions | null>(null);
+  const [imported, setImported] = useState<{ name: string; text: string } | null>(null);
+  const [keepText, setKeepText] = useState(false);
+  const tenant = useLiveQuery(() => db.tenants.get(existing.tenant_id), [existing.tenant_id]);
+
+  function applyAll(x: LeaseSuggestions) {
+    if (x.monthlyRent) setRent(String(x.monthlyRent));
+    if (x.leaseStart) setLeaseStart(x.leaseStart);
+    if (x.leaseEnd) setLeaseEnd(x.leaseEnd);
+    if (x.deposit) setDeposit(String(x.deposit));
+    if (x.govProgram || x.tenantPortion) applySchedule(x);
+  }
+  function applySchedule(x: LeaseSuggestions) {
+    setSchedule((v) => ({
+      ...v,
+      ...(x.govProgram ? { setup: v.setup === 'self_pay' ? 'gov_tenant' as const : v.setup, govProgram: x.govProgram } : {}),
+      ...(x.govPortion ? { govPortion: String(x.govPortion) } : {}),
+      ...(x.tenantPortion ? { tenantPortion: String(x.tenantPortion) } : {}),
+    }));
+  }
 
   async function handleSave() {
     if (!rent) return;
@@ -41,6 +63,17 @@ export function LeaseFormModal({ existing, onClose }: { existing: Lease; onClose
       });
       proofId = doc.id;
     }
+    if (keepText && imported && unit?.property_id) {
+      await saveDocument({
+        ...blankMeta(existing.owner_id),
+        property_id: unit.property_id,
+        tenant_id: existing.tenant_id,
+        lease_id: existing.id,
+        doc_type: 'lease',
+        title: `Imported lease: ${imported.name}`,
+        content: imported.text,
+      });
+    }
     await saveLease({
       ...existing,
       total_monthly_rent: Number(rent),
@@ -59,6 +92,27 @@ export function LeaseFormModal({ existing, onClose }: { existing: Lease; onClose
     <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-20">
       <div className="bg-slate-900 border border-slate-800 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold">Edit lease</h2>
+        <DocImport label="Fill from lease PDF" accept="application/pdf,image/*" onText={(text, file) => { setSugg(parseLeaseText(text)); setImported({ name: file.name, text }); }} />
+        {sugg && (
+          <div className="rounded-lg border border-indigo-800 bg-slate-950 p-2 space-y-1">
+            <div className="flex justify-between text-xs font-medium"><span>Suggested from {imported?.name}</span>
+              <button type="button" onClick={() => applyAll(sugg)} className="rounded bg-indigo-600 px-1.5 py-0.5">Use all</button></div>
+            {sugg.tenantNames.length > 0 && <Suggestion label="Tenant(s)" value={sugg.tenantNames.join(', ')}
+              note={tenant && !sugg.tenantNames.some((n) => n.toLowerCase() === tenant.full_name.toLowerCase()) ? `on file: ${tenant.full_name}` : undefined} />}
+            {(sugg.address || sugg.unit) && <Suggestion label="Premises" value={[sugg.address, sugg.unit && !sugg.address?.includes(sugg.unit) ? `Unit ${sugg.unit}` : ''].filter(Boolean).join(' · ')}
+              note={unit && sugg.unit && unit.name.toUpperCase().indexOf(sugg.unit) < 0 ? `unit on file: ${unit.name}` : undefined} />}
+            {sugg.leaseStart && <Suggestion label="Start" value={sugg.leaseStart} onUse={() => setLeaseStart(sugg.leaseStart!)} />}
+            {sugg.leaseEnd && <Suggestion label="End" value={sugg.leaseEnd} onUse={() => setLeaseEnd(sugg.leaseEnd!)} />}
+            {sugg.monthlyRent && <Suggestion label="Monthly rent" value={`$${sugg.monthlyRent}`} onUse={() => setRent(String(sugg.monthlyRent))} />}
+            {sugg.deposit && <Suggestion label="Deposit" value={`$${sugg.deposit}`} onUse={() => setDeposit(String(sugg.deposit))} />}
+            {(sugg.govProgram || sugg.govPortion || sugg.tenantPortion) && <Suggestion label="Payer split"
+              value={[sugg.govProgram === 'cityfheps' ? 'CityFHEPS' : sugg.govProgram ? 'Section 8' : '', sugg.govPortion && `gov $${sugg.govPortion}`, sugg.tenantPortion && `tenant $${sugg.tenantPortion}`].filter(Boolean).join(' · ')}
+              onUse={() => applySchedule(sugg)} />}
+            {!sugg.tenantNames.length && !sugg.leaseStart && !sugg.monthlyRent && <p className="text-xs text-amber-300">Couldn't find lease fields in that file.</p>}
+            <p className="text-[11px] text-slate-500">Tenant name and unit are shown for checking only; change them on the tenant/unit.</p>
+            <label className="flex items-center gap-1 text-[11px] text-slate-400"><input type="checkbox" checked={keepText} onChange={(e) => setKeepText(e.target.checked)} /> Also save the extracted text to Documents when I tap Save</label>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <Field label="Monthly rent"><input type="number" step="0.01" className={inputCls} value={rent} onChange={(e) => setRent(e.target.value)} /></Field>
           <Field label="Due day"><input type="number" min="1" max="28" className={inputCls} value={dueDay} onChange={(e) => setDueDay(e.target.value)} /></Field>

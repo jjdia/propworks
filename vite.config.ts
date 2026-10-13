@@ -35,11 +35,19 @@ export default defineConfig({
         // the latest app shell when online, with an offline cache fallback
         // so the app still opens (never blank) with no connection.
         navigateFallback: 'index.html',
+        // OCR assets (~3 MB+) are fetched only when Jeff scans something,
+        // then cached at runtime — not precached for every visitor.
+        globIgnores: ['**/ocr/**', '**/pdf.worker*'],
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.mode === 'navigate',
             handler: 'NetworkFirst',
             options: { cacheName: 'pw-pages', networkTimeoutSeconds: 3 },
+          },
+          {
+            urlPattern: ({ url }) => url.pathname.includes('/ocr/') || /pdf\.worker/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: { cacheName: 'pw-ocr', expiration: { maxEntries: 20 } },
           },
         ],
       },
