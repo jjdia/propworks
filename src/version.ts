@@ -4,4 +4,4 @@
 // APP_VERSION_DETAIL is admin-only.
 export const APP_VERSION = 'V 33';
 export const APP_VERSION_DETAIL =
-  'Rent Tracking: Edit tenant / Edit lease shortcuts (lease card + payment modal), reusing Tenants-page modals';
+  'Rent Tracking edit shortcuts; lease unit picker w/ conflict confirm; lease edits regenerate unpaid current/future months';
