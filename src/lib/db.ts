@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import type {
   Property, RentalUnit, Tenant, Lease, RentCharge, RentPayment, RentInstallment, Expense, PropertyDocument,
-  Contractor, MaintenanceSchedule, OutboxItem,
+  Contractor, MaintenanceSchedule, OutboxItem, RecurringExpense,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -31,6 +31,7 @@ class PropertyWorksDB extends Dexie {
   documents!: Table<PropertyDocument, string>;
   contractors!: Table<Contractor, string>;
   maintenance_schedules!: Table<MaintenanceSchedule, string>;
+  recurring_expenses!: Table<RecurringExpense, string>;
   outbox!: Table<OutboxItem, string>;
   meta!: Table<{ key: string; value: unknown }, string>;
 
@@ -62,6 +63,10 @@ class PropertyWorksDB extends Dexie {
       contractors: 'id, owner_id, updated_at, deleted_at',
       maintenance_schedules: 'id, owner_id, property_id, next_due_date, status, updated_at, deleted_at',
     });
+    // v5 (V 34): adds recurring_expenses. Additive — existing tables untouched.
+    this.version(5).stores({
+      recurring_expenses: 'id, owner_id, property_id, category, updated_at, deleted_at',
+    });
   }
 }
 
@@ -80,6 +85,7 @@ export const BACKUP_TABLES = [
   'documents',
   'contractors',
   'maintenance_schedules',
+  'recurring_expenses',
 ] as const;
 
 export type BackupTableName = typeof BACKUP_TABLES[number];
@@ -98,6 +104,7 @@ export interface BackupSnapshot {
   documents: PropertyDocument[];
   contractors: Contractor[];
   maintenance_schedules: MaintenanceSchedule[];
+  recurring_expenses?: RecurringExpense[];
 }
 
 // -----------------------------------------------------------------------
@@ -124,6 +131,7 @@ export async function buildBackupSnapshot(): Promise<BackupSnapshot> {
     documents: await db.documents.toArray(),
     contractors: await db.contractors.toArray(),
     maintenance_schedules: await db.maintenance_schedules.toArray(),
+    recurring_expenses: await db.recurring_expenses.toArray(),
   };
 }
 
@@ -175,7 +183,7 @@ export async function restoreFromBackup(json: string) {
   const tables = [
     db.properties, db.rental_units, db.tenants, db.leases,
     db.rent_charges, db.rent_payments, db.rent_installments, db.expenses,
-    db.documents, db.contractors, db.maintenance_schedules,
+    db.documents, db.contractors, db.maintenance_schedules, db.recurring_expenses,
   ];
   await db.transaction('rw', tables, async () => {
     if (Array.isArray(snapshot.properties)) await db.properties.bulkPut(snapshot.properties as Property[]);
@@ -189,5 +197,6 @@ export async function restoreFromBackup(json: string) {
     if (Array.isArray(snapshot.documents)) await db.documents.bulkPut(snapshot.documents as PropertyDocument[]);
     if (Array.isArray(snapshot.contractors)) await db.contractors.bulkPut(snapshot.contractors as Contractor[]);
     if (Array.isArray(snapshot.maintenance_schedules)) await db.maintenance_schedules.bulkPut(snapshot.maintenance_schedules as MaintenanceSchedule[]);
+    if (Array.isArray(snapshot.recurring_expenses)) await db.recurring_expenses.bulkPut(snapshot.recurring_expenses as RecurringExpense[]);
   });
 }

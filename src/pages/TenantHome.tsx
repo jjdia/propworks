@@ -5,6 +5,7 @@ import {
   getMyTenantContext, type TenantContext,
 } from '../lib/maintenance';
 import type { MaintenanceRequest, RequestUrgency } from '../lib/types';
+import { PushSettings } from '../components/PushSettings';
 
 const STATUS_LABEL: Record<string, string> = {
   submitted: 'Submitted — waiting for review',
@@ -38,6 +39,7 @@ export function TenantHome() {
 
   return (
     <div className="space-y-4">
+      <PushSettings audience="tenant" />
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Maintenance</h1>
         <button onClick={() => setShowForm(true)} className="rounded-md bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 text-sm font-medium">

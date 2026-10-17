@@ -163,6 +163,21 @@ The scheduled `Backup Supabase` workflow has been failing (it needs the
   months. HRA tenant share is locked to 15th/30th in the UI; tenant paying
   directly can pick 1 check or 1st & 15th. No new migration.
 
+## V 34 — push reminders + recurring bills (PR open, NOT released)
+
+- Migration `supabase/schema-v10-push-and-recurring.sql` (additive; NOT applied).
+  Dexie v5 adds `recurring_expenses` (synced via outbox, in backups).
+- Edge Function source now lives in the repo: `supabase/functions/push-reminders`
+  (daily, `x-cron-secret`), with pure logic copied into `_shared/` from
+  `src/lib/{types,payerSetup,chargeStatus,rentPush,recurringExpenses}.ts` by
+  `node scripts/sync-edge-shared.mjs` (CI fails if stale). `send-email` and
+  `rent-reminder-check` sources are still NOT in the repo.
+- Cron template: `supabase/cron-push-reminders.sql` (placeholder secret).
+- VAPID: `node scripts/generate-vapid-keys.mjs` (stdout only). Public key →
+  repo secret `VITE_VAPID_PUBLIC_KEY` + Supabase secret `VAPID_PUBLIC_KEY`;
+  private → Supabase secret `VAPID_PRIVATE_KEY`; plus `VAPID_SUBJECT`.
+- Tests: `rent-push-test.ts`, `recurring-expense-test.ts`, `push-setup-test.ts`.
+
 ## Working conventions Jeff has been explicit about
 
 - **Every form/modal must have a Cancel button.** He found and was

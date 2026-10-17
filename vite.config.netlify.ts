@@ -28,6 +28,8 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: 'index.html',
+        // V 34: Web Push handlers (public/push-sw.js) inside the generated SW.
+        importScripts: ['push-sw.js'],
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.mode === 'navigate',

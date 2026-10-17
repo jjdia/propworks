@@ -1,0 +1,174 @@
+import type { Lease, RentCharge, RentInstallment, Tenant } from './types';
+import { payerSetup, tenantShareFrequency, type PayerSetup } from './payerSetup';
+import { receivedOn, deriveChargeStatus, fmtMoney } from './chargeStatus';
+
+// ---------------------------------------------------------------------------
+// Rent-due push decisions (V 34). PURE: no Dexie, no Supabase, no Date.now().
+// Shared verbatim with the `push-reminders` Edge Function (copied into
+// supabase/functions/_shared by scripts/sync-edge-shared.mjs).
+//
+// Rules (reusing the #10 payer-setup + chargeStatus logic):
+//   - 1st of the month: every ACTIVE lease whose tenant pays something
+//     (self_pay, gov_tenant) gets a rent-due push for the tenant check that
+//     falls in the first half of the month (the whole share when monthly).
+//   - 15th: ONLY gov_tenant leases whose tenant share is twice monthly
+//     (1st/15th) get a reminder for the 15th check.
+//   - gov_hra (setup 3, HRA pays the whole tenant share): tenant-portion
+//     reminders are skipped entirely.
+//   - Skip when that portion is already fully received for the period.
+//   - Dedupe key = one push per tenant per due date.
+// ---------------------------------------------------------------------------
+
+export type RentPushKind = 'rent_due' | 'tenant_portion_15th';
+
+export interface RentPushDecision {
+  leaseId: string;
+  tenantId: string;
+  tenantName: string;
+  kind: RentPushKind;
+  dueDate: string; // YYYY-MM-DD
+  amount: number; // outstanding on this check
+  setup: PayerSetup;
+  dedupeKey: string;
+  title: string;
+  body: string;
+}
+
+export interface RentPushSkip {
+  leaseId: string;
+  tenantName: string;
+  reason: 'already_paid' | 'hra_pays_tenant_share' | 'not_twice_monthly' | 'nothing_owed_by_tenant' | 'lease_not_started' | 'lease_ended';
+}
+
+export interface RentPushInput {
+  today: string; // YYYY-MM-DD in America/New_York
+  leases: Lease[];
+  charges: RentCharge[];
+  installments: RentInstallment[];
+  tenants: Pick<Tenant, 'id' | 'full_name'>[];
+}
+
+export interface RentPushPlan {
+  isRentDay: boolean;
+  decisions: RentPushDecision[];
+  skipped: RentPushSkip[];
+}
+
+const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
+const dayOf = (d: string) => Number(d.slice(8, 10));
+
+export function tenantDedupeKey(tenantId: string, dueDate: string) {
+  return `rent:${tenantId}:${dueDate}`;
+}
+
+export function isLeaseActiveOn(lease: Lease, today: string): boolean {
+  if (lease.deleted_at || lease.status !== 'active') return false;
+  if (lease.lease_start && lease.lease_start > today) return false;
+  if (lease.lease_end && lease.lease_end < monthStart(today)) return false;
+  return true;
+}
+
+/** Tenant-paid installments (portion tenant, NOT paid by HRA) for a month's charge. */
+function tenantChecks(installments: RentInstallment[], chargeId: string) {
+  return installments
+    .filter((i) => !i.deleted_at && i.rent_charge_id === chargeId && i.portion === 'tenant' && i.payer !== 'hra')
+    .sort((a, b) => a.due_date.localeCompare(b.due_date));
+}
+
+export function planRentPushes(input: RentPushInput): RentPushPlan {
+  const { today } = input;
+  const day = dayOf(today);
+  const isRentDay = day === 1 || day === 15;
+  const plan: RentPushPlan = { isRentDay, decisions: [], skipped: [] };
+  if (!isRentDay) return plan;
+  const month = monthStart(today);
+  const seen = new Set<string>();
+
+  for (const lease of input.leases) {
+    if (lease.deleted_at || lease.status !== 'active') continue;
+    const tenantName = input.tenants.find((t) => t.id === lease.tenant_id)?.full_name ?? 'Tenant';
+    if (lease.lease_start && lease.lease_start > today) { plan.skipped.push({ leaseId: lease.id, tenantName, reason: 'lease_not_started' }); continue; }
+    if (lease.lease_end && lease.lease_end < month) { plan.skipped.push({ leaseId: lease.id, tenantName, reason: 'lease_ended' }); continue; }
+
+    const setup = payerSetup(lease);
+    if (setup === 'gov_hra') { plan.skipped.push({ leaseId: lease.id, tenantName, reason: 'hra_pays_tenant_share' }); continue; }
+    const twice = tenantShareFrequency(lease) === 'twice_monthly';
+    if (day === 15 && !(setup === 'gov_tenant' && twice)) { plan.skipped.push({ leaseId: lease.id, tenantName, reason: 'not_twice_monthly' }); continue; }
+
+    const charge = input.charges.find((c) => !c.deleted_at && c.lease_id === lease.id && c.charge_month === month);
+    const checks = charge ? tenantChecks(input.installments, charge.id) : [];
+    let amount: number;
+    let dueDate = today;
+    if (checks.length > 0) {
+      // 1st → first check of the month (≤14th); 15th → the 15th+ check.
+      const check = day === 1 ? checks.find((c) => dayOf(c.due_date) < 15) ?? checks[0] : checks.find((c) => dayOf(c.due_date) >= 15);
+      if (!check) { plan.skipped.push({ leaseId: lease.id, tenantName, reason: 'nothing_owed_by_tenant' }); continue; }
+      const outstanding = Math.max(0, Math.round((Number(check.amount) - receivedOn(check)) * 100) / 100);
+      if (outstanding <= 0) { plan.skipped.push({ leaseId: lease.id, tenantName, reason: 'already_paid' }); continue; }
+      amount = outstanding;
+      dueDate = check.due_date < today ? today : check.due_date;
+    } else {
+      // No month generated yet: fall back to the lease terms.
+      if (charge && charge.status === 'paid') { plan.skipped.push({ leaseId: lease.id, tenantName, reason: 'already_paid' }); continue; }
+      const gov = Number(lease.government_portion ?? 0);
+      const share = Number(lease.tenant_portion ?? (gov > 0 ? 0 : lease.total_monthly_rent));
+      if (!(share > 0)) { plan.skipped.push({ leaseId: lease.id, tenantName, reason: 'nothing_owed_by_tenant' }); continue; }
+      amount = twice ? (day === 1 ? Math.ceil(share * 50) / 100 : Math.floor(share * 50) / 100) : share;
+    }
+
+    const key = tenantDedupeKey(lease.tenant_id, dueDate);
+    if (seen.has(key)) continue; // one push per tenant per due date
+    seen.add(key);
+    const kind: RentPushKind = day === 15 ? 'tenant_portion_15th' : 'rent_due';
+    plan.decisions.push({
+      leaseId: lease.id,
+      tenantId: lease.tenant_id,
+      tenantName,
+      kind,
+      dueDate,
+      amount,
+      setup,
+      dedupeKey: key,
+      title: kind === 'rent_due' ? 'Rent is due' : 'Your rent portion is due',
+      body: kind === 'rent_due'
+        ? `${setup === 'gov_tenant' ? 'Your portion of rent' : 'Rent'} (${fmtMoney(amount)}) is due today.`
+        : `The 15th payment of your rent portion (${fmtMoney(amount)}) is due today.`,
+    });
+  }
+  return plan;
+}
+
+export interface LandlordSummary {
+  title: string;
+  body: string;
+  remindedCount: number;
+  outstandingTotal: number;
+}
+
+/** Landlord summary push: who was reminded + what's outstanding this month. */
+export function buildLandlordSummary(plan: RentPushPlan, input: RentPushInput, reachable: Set<string>): LandlordSummary {
+  const month = monthStart(input.today);
+  let outstandingTotal = 0;
+  for (const lease of input.leases) {
+    if (!isLeaseActiveOn(lease, input.today)) continue;
+    const charge = input.charges.find((c) => !c.deleted_at && c.lease_id === lease.id && c.charge_month === month);
+    if (!charge) continue;
+    const insts = input.installments.filter((i) => i.rent_charge_id === charge.id);
+    outstandingTotal += deriveChargeStatus(charge, insts, payerSetup(lease)).outstanding;
+  }
+  outstandingTotal = Math.round(outstandingTotal * 100) / 100;
+  const names = plan.decisions.map((d) => `${d.tenantName} ${fmtMoney(d.amount)}${reachable.has(d.tenantId) ? '' : ' (no push device)'}`);
+  const paid = plan.skipped.filter((s) => s.reason === 'already_paid').length;
+  const day = dayOf(input.today);
+  const parts = [
+    names.length ? `Due: ${names.join(', ')}.` : 'No tenant reminders due.',
+    paid ? `${paid} already paid.` : '',
+    `Outstanding this month: ${fmtMoney(outstandingTotal)}.`,
+  ].filter(Boolean);
+  return {
+    title: day === 15 ? 'Rent check-in (15th)' : 'Rent day summary',
+    body: parts.join(' '),
+    remindedCount: plan.decisions.length,
+    outstandingTotal,
+  };
+}

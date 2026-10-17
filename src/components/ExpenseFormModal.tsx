@@ -7,17 +7,29 @@ import { parseReceiptText, type ReceiptSuggestions } from '../lib/docParse';
 import { useAppStore } from '../store/useAppStore';
 import { EXPENSE_CATEGORIES, type PaidBy, type Frequency, type Expense } from '../lib/types';
 
-export function ExpenseFormModal({ existing, onClose }: { existing?: Expense; onClose: () => void }) {
+/** V 34 "Pay & log": prefill from a recurring bill; saving stamps the occurrence as logged. */
+export interface ExpensePrefill {
+  property_id: string;
+  category: string;
+  vendor: string;
+  amount: string;
+  expense_date: string;
+  frequency: Frequency;
+  recurring_expense_id: string;
+  billing_period: string;
+}
+
+export function ExpenseFormModal({ existing, prefill, onClose }: { existing?: Expense; prefill?: ExpensePrefill; onClose: () => void }) {
   const ownerId = useAppStore((s) => s.ownerId) ?? 'local-owner';
   const properties = useLiveQuery(() => db.properties.filter((p) => !p.deleted_at).sortBy('name'), []);
 
-  const [propertyId, setPropertyId] = useState(existing?.property_id ?? '');
-  const [date, setDate] = useState(existing?.expense_date ?? new Date().toISOString().slice(0, 10));
-  const [category, setCategory] = useState<string>(existing?.category ?? EXPENSE_CATEGORIES[0]);
+  const [propertyId, setPropertyId] = useState(existing?.property_id ?? prefill?.property_id ?? '');
+  const [date, setDate] = useState(existing?.expense_date ?? prefill?.expense_date ?? new Date().toISOString().slice(0, 10));
+  const [category, setCategory] = useState<string>(existing?.category ?? prefill?.category ?? EXPENSE_CATEGORIES[0]);
   const [paidBy, setPaidBy] = useState<PaidBy>(existing?.paid_by ?? 'landlord');
-  const [frequency, setFrequency] = useState<Frequency>(existing?.frequency ?? 'one_time');
-  const [vendor, setVendor] = useState(existing?.vendor ?? '');
-  const [amount, setAmount] = useState(existing ? String(existing.amount) : '');
+  const [frequency, setFrequency] = useState<Frequency>(existing?.frequency ?? prefill?.frequency ?? 'one_time');
+  const [vendor, setVendor] = useState(existing?.vendor ?? prefill?.vendor ?? '');
+  const [amount, setAmount] = useState(existing ? String(existing.amount) : prefill?.amount ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
   const [saving, setSaving] = useState(false);
   const [sugg, setSugg] = useState<ReceiptSuggestions | null>(null);
@@ -49,6 +61,7 @@ export function ExpenseFormModal({ existing, onClose }: { existing?: Expense; on
       vendor: vendor.trim() || undefined,
       amount: Number(amount),
       description: description.trim() || undefined,
+      ...(prefill && !existing ? { recurring_expense_id: prefill.recurring_expense_id, billing_period: prefill.billing_period } : {}),
       deleted_at: existing?.deleted_at ?? null,
     });
     setSaving(false);
@@ -58,7 +71,7 @@ export function ExpenseFormModal({ existing, onClose }: { existing?: Expense; on
   return (
     <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-20">
       <div className="bg-slate-900 border border-slate-800 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-semibold">{existing ? 'Edit expense' : 'Add expense'}</h2>
+        <h2 className="text-lg font-semibold">{existing ? 'Edit expense' : prefill ? `Pay & log — ${prefill.billing_period}` : 'Add expense'}</h2>
 
         {!properties?.length ? (
           <p className="text-sm text-amber-300">Add a property first before logging expenses.</p>

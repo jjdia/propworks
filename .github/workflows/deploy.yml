@@ -28,6 +28,8 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # V 34 Web Push (public key only; empty = push UI shows 'not set up').
+          VITE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_VAPID_PUBLIC_KEY }}
       # GitHub Pages has no SPA rewrite: unknown paths (e.g. /propworks/admin)
       # must serve the app shell. Copying index.html → 404.html is the standard
       # Pages fallback so BrowserRouter deep links work on refresh/direct open.

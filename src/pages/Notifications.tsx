@@ -4,6 +4,7 @@ import { db } from '../lib/db';
 import { computeOverdueItems, summarizeOverdue } from '../lib/overdue';
 import { notificationsSupported, requestNotificationPermission } from '../lib/localNotifications';
 import { payerLabel } from '../lib/payerSetup';
+import { PushSettings } from '../components/PushSettings';
 
 
 export function Notifications() {
@@ -31,6 +32,8 @@ export function Notifications() {
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold">Notifications</h1>
+
+      <PushSettings audience="owner" />
 
       {notificationsSupported() && permission !== 'granted' && (
         <button onClick={handleEnableNotifications} className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm text-left hover:border-slate-700">
