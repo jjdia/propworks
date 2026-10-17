@@ -1,3 +1,4 @@
+import { BillsDueCard } from '../components/BillsDueCard';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -30,6 +31,7 @@ export function Triage() {
   return (
     <div className="space-y-6">
       <h1 className="text-lg font-semibold">Triage — balances &amp; ending leases</h1>
+      <BillsDueCard compact />
 
       <section className="space-y-2">
         <h2 className="font-medium">Who owes what</h2>

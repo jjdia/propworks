@@ -1,3 +1,4 @@
+import { BillsDueCard } from '../components/BillsDueCard';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../lib/db';
 import { Link } from 'react-router-dom';
@@ -40,6 +41,7 @@ export function Dashboard() {
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-semibold">Dashboard</h1>
+      <BillsDueCard compact />
 
       <div className="grid grid-cols-2 gap-3">
         <StatCard label="Properties" value={properties?.length ?? 0} to="/properties" />

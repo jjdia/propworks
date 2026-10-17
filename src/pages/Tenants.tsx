@@ -8,6 +8,8 @@ import { TenantFormModal } from '../components/TenantFormModal';
 import { LeaseFormModal } from '../components/LeaseFormModal';
 import type { Tenant, Lease } from '../lib/types';
 import { PAYER_SETUP_LABEL, PROGRAM_LABEL, payerSetupInfo } from '../lib/payerSetup';
+import { isHraLease, recertStatus } from '../lib/hraRecert';
+import { format } from 'date-fns';
 
 export function Tenants() {
   const ownerId = useAppStore((s) => s.ownerId) ?? 'local-owner';
@@ -58,6 +60,7 @@ export function Tenants() {
         {tenants?.map((t) => {
           const lease = leases?.find((l) => l.tenant_id === t.id && l.status === 'active');
           const info = lease ? payerSetupInfo(lease) : null;
+          const recert = lease && isHraLease(lease) ? recertStatus(lease, format(new Date(), 'yyyy-MM-dd')) : null;
           return (
             <div key={t.id} className="bg-slate-900 border border-slate-800 rounded-xl p-3">
               <div className="flex items-start justify-between">
@@ -69,6 +72,12 @@ export function Tenants() {
                       <span className="text-[10px] uppercase tracking-wide bg-slate-800 rounded px-1.5 py-0.5 text-slate-300">
                         {PAYER_SETUP_LABEL[info.setup]}{info.program && info.program !== 'hra' ? ` · ${PROGRAM_LABEL[info.program]}` : ''}
                       </span>
+                      {recert && (recert.status === 'overdue' || recert.status === 'due_7' || recert.status === 'due_30') && (
+                        <span className={`text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 ${recert.status === 'overdue' ? 'bg-rose-950 border border-rose-900 text-rose-300' : 'bg-amber-950 border border-amber-900 text-amber-300'}`} title={`Yearly HRA recert ${recert.dueDate}`}>
+                          Recert due{recert.status === 'overdue' ? ' (overdue)' : ` ${recert.dueDate}`}
+                        </span>
+                      )}
+                      {recert?.status === 'unknown' && <span className="text-[10px] uppercase tracking-wide bg-slate-800 rounded px-1.5 py-0.5 text-slate-400">Recert date unknown</span>}
                       {info.hraProofMissing && <span className="text-[10px] uppercase tracking-wide bg-amber-950 border border-amber-900 rounded px-1.5 py-0.5 text-amber-300">HRA proof missing</span>}
                       {info.needsReview && <span className="text-[10px] uppercase tracking-wide bg-amber-900 rounded px-1.5 py-0.5 text-amber-200" title={info.reviewReasons.join('; ')}>Review payer setup</span>}
                     </div>

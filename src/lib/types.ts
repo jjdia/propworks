@@ -77,6 +77,8 @@ export interface Lease extends SyncMeta {
   hra_case_number?: string | null;
   hra_approved_on?: string | null; // YYYY-MM-DD
   hra_proof_document_id?: string | null; // documents.id (no FK on purpose)
+  // V 34: explicit yearly HRA recert date. NULL = hra_approved_on + 1 year.
+  hra_recert_due_on?: string | null; // YYYY-MM-DD
   rent_due_day?: number;
   security_deposit?: number;
   status: LeaseStatus;
@@ -143,6 +145,25 @@ export interface Expense extends SyncMeta {
   amount: number;
   billing_period?: string;
   description?: string;
+  // V 34: set by "Pay & log" so the bill occurrence (billing_period) shows logged.
+  recurring_expense_id?: string | null;
+}
+
+// V 34 recurring bills (mortgage, tax, utilities…). Owner-private → Dexie + outbox.
+export type RecurringCategory = 'mortgage' | 'property_tax' | 'insurance' | 'hoa' | 'water_sewer' | 'gas' | 'electric' | 'internet' | 'other';
+export type RecurringFrequency = 'monthly' | 'quarterly' | 'semiannual' | 'annual';
+
+export interface RecurringExpense extends SyncMeta {
+  property_id: string;
+  rental_unit_id?: string | null;
+  category: RecurringCategory;
+  payee?: string | null;
+  amount?: number | null; // blank allowed — Jeff fills it in
+  due_day?: number | null; // 1-31, blank allowed
+  frequency: RecurringFrequency;
+  anchor_month?: number | null; // 1-12, first due month for non-monthly bills
+  active: boolean;
+  notes?: string | null;
 }
 
 export const EXPENSE_CATEGORIES = [
@@ -151,7 +172,7 @@ export const EXPENSE_CATEGORIES = [
   'Landscaping / Grounds', 'Snow Removal', 'Repairs & Maintenance', 'Insurance',
   'Property Taxes', 'Mortgage Payment', 'Mortgage Interest',
   'Municipal Fines / Tickets / Building Violations', 'Legal / Professional',
-  'Management Fees', 'Supplies', 'Capital Improvement', 'Miscellaneous',
+  'Management Fees', 'Supplies', 'Capital Improvement', 'Miscellaneous', 'HOA / Condo Fees',
 ] as const;
 
 // ---------------------------------------------------------------------------

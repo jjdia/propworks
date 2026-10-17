@@ -24,7 +24,7 @@ import type { OutboxItem } from './types';
 const TABLES = [
   'properties', 'rental_units', 'tenants', 'leases',
   'rent_charges', 'rent_payments', 'rent_installments', 'expenses', 'documents',
-  'contractors', 'maintenance_schedules',
+  'contractors', 'maintenance_schedules', 'recurring_expenses',
 ] as const;
 type SyncTable = typeof TABLES[number];
 
@@ -96,6 +96,9 @@ async function pullTable(table: SyncTable, ownerId: string, since: string | null
   // `data` are left completely untouched.
   await (db[table] as import('dexie').Table<unknown, string>).bulkPut(data);
 }
+
+/** True once at least one full pull has completed on this device. */
+export function hasPulledOnce() { return Boolean(localStorage.getItem(LAST_PULL_KEY)); }
 
 export async function runSync(ownerId: string | null) {
   if (!supabaseConfigured || !navigator.onLine) {

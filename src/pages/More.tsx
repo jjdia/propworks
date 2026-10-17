@@ -13,6 +13,7 @@ const LINKS = [
   { to: '/reports', label: 'Reports & Tax Export', icon: '📊' },
   { to: '/lease-generator', label: 'Lease Generator', icon: '📝' },
   { to: '/documents', label: 'Documents', icon: '📁' },
+  { to: '/bills', label: 'Recurring bills & reminders', icon: '📅' },
   { to: '/expenses', label: 'Expenses', icon: '🧾' },
   { to: '/tenants', label: 'Tenants', icon: '🧑\u200d🤝\u200d🧑' },
   { to: '/contractors', label: 'Contractors', icon: '🛠️' },

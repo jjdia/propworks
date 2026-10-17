@@ -2,7 +2,7 @@ import { db, writeRollingBackup } from './db';
 import { enqueueOutbox } from './sync';
 import type {
   Property, RentalUnit, Tenant, Lease, RentCharge, RentPayment, RentInstallment, Expense, PropertyDocument,
-  Contractor, MaintenanceSchedule,
+  Contractor, MaintenanceSchedule, RecurringExpense,
 } from './types';
 export { buildInstallments } from './installments';
 import { rollUpChargeWith, markChargeFullWith, type ChargeRollupDeps } from './chargeStatus';
@@ -18,7 +18,7 @@ import { regenerateLeaseMonthsWith, currentMonthStart, type LeaseRegenDeps } fro
 
 function nowIso() { return new Date().toISOString(); }
 
-type MutableTable = 'properties' | 'rental_units' | 'tenants' | 'leases' | 'rent_charges' | 'rent_payments' | 'rent_installments' | 'expenses' | 'documents' | 'contractors' | 'maintenance_schedules';
+type MutableTable = 'properties' | 'rental_units' | 'tenants' | 'leases' | 'rent_charges' | 'rent_payments' | 'rent_installments' | 'expenses' | 'documents' | 'contractors' | 'maintenance_schedules' | 'recurring_expenses';
 
 async function saveRecord<T extends { id: string; owner_id: string; updated_at: string; created_at: string }>(
   table: MutableTable,
@@ -51,6 +51,7 @@ export const saveExpense = (e: Expense) => saveRecord('expenses', e);
 export const saveDocument = (d: PropertyDocument) => saveRecord('documents', d);
 export const saveContractor = (c: Contractor) => saveRecord('contractors', c);
 export const saveMaintenanceSchedule = (m: MaintenanceSchedule) => saveRecord('maintenance_schedules', m);
+export const saveRecurringExpense = (r: RecurringExpense) => saveRecord('recurring_expenses', r);
 
 // Soft delete: sets deleted_at locally (record stays recoverable) and
 // enqueues the same soft-delete to Supabase. Nothing is ever hard-removed

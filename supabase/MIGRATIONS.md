@@ -16,8 +16,15 @@ reference/reproducibility and must be applied **in order** on a fresh project.
 | `schema-v7-security-hardening.sql` | 20260919171150 · harden_function_search_path; 20260920051941 · revoke_anon_execute_my_portfolio_id; 20260921024046 · security_hardening_invites_and_scoping; 20260921024233 · rent_reminder_cron_auth; 20260921024308 · security_hardening_revoke_anon |
 | `schema-v8-contractors-schedules.sql` | 20260922022615 · contractor_roster_and_scheduled_maintenance |
 | `schema-v9-payer-setups.sql` | issue #10 — see HANDOFF "Payer setups" for live-apply status |
+| `schema-v10-push-and-recurring.sql` | Applied 2026-10-17 ~16:20 ET via the Management API SQL endpoint (V 34), so it is **not** recorded in `schema_migrations`. Pre-v10 backup: `backups/propworks-live-20261017T201459Z-pre-v10.sql.gz`. Adds `push_subscriptions`, `push_send_log`, `recurring_expenses`, `expenses.recurring_expense_id` |
 
-Next free number: **v10**.
+Next free number: **v11**.
+
+`push-reminders-daily` (jobid 3, `5 13 * * *`) was scheduled 2026-10-17 by copying the v7 job's command server-side and swapping only the function path, so it uses the same inline secret. The value never left the DB.
+
+`cron-push-reminders.sql` is NOT a migration: it's the pg_cron job for the
+`push-reminders` Edge Function, run by hand with the real `CRON_SECRET`
+substituted in the SQL editor (never committed).
 
 ## Verification (2026-10-08)
 

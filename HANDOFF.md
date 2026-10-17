@@ -138,6 +138,7 @@ connection strings).
 | When | File | Size | sha256 | Verified | Used for |
 |---|---|---|---|---|---|
 | 2026-10-08 20:54 ET | `/workspace/propworks/backups/propworks-live-20261008-205438.dump` (custom format, pg 17.6) | 492K (502,973 B) | `d265a016239628fb1c77fe606008748cc69646d7e9489d94e52455eb80c7812f` | `pg_restore --list` (831 TOC entries, 21 public tables) + scratch restore into PG17 (row counts: leases 8, rent_charges 86, rent_installments 86, contractors 1, maintenance_schedules 0) | #10 PR0 (v6–v8 recovery) and PR1 (`schema-v9-payer-setups.sql`) |
+| 2026-10-17 16:14 ET | `/workspace/propworks/backups/propworks-live-20261017T201459Z-pre-v10.sql.gz` (plain SQL, gzip, pg_dump 17.11 of pg 17.6), artifact of Backup Supabase run https://github.com/jjdia/propworks/actions/runs/39065884829 | 79,896 B | `dee849627b6a6c07176965df50d116d84ef858afca1aeae679586cad55c1d808` | `gzip -t` + scratch restore into local PG17: 21 public tables, all 21 row counts equal the dump's COPY counts (leases 8, rent_charges 89, rent_installments 89, expenses 9, properties 10, rental_units 11, tenants 8, profiles 2). Only errors were platform extensions (pg_cron/pg_net/vault). | V 34 `schema-v10-push-and-recurring.sql` |
 
 Note: the DB password was pasted in chat on 2026-10-08; Jeff is rotating it.
 The scheduled `Backup Supabase` workflow has been failing (it needs the
@@ -162,6 +163,26 @@ The scheduled `Backup Supabase` workflow has been failing (it needs the
   setup" chips on Tenants, Backfill stamps `marked_full_at` on bulk-paid gov
   months. HRA tenant share is locked to 15th/30th in the UI; tenant paying
   directly can pick 1 check or 1st & 15th. No new migration.
+
+## V 34 — push reminders + recurring bills (RELEASED 2026-10-17)
+
+- Live: v10 applied (Management API); Supabase secrets VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT set; GitHub secret VITE_VAPID_PUBLIC_KEY set; `push-reminders` deployed (--no-verify-jwt); cron `push-reminders-daily` 13:05 UTC uses the v7 job's inline x-cron-secret (no vault; CRON_SECRET not rotated).
+- The `SUPABASE_DB_URL` in the build-box shell was not a valid URI on 2026-10-17. The backup came from the GitHub workflow artifact instead.
+
+- Migration `supabase/schema-v10-push-and-recurring.sql` (additive; NOT applied).
+  Dexie v5 adds `recurring_expenses` (synced via outbox, in backups).
+- Push goes to OWNERS ONLY (Jeff + Lana): rent-due summary on 1st/15th + bill due days; no tenant pushes, no tenant subscribe card (push_subscriptions kept generic).
+- Edge Function source now lives in the repo: `supabase/functions/push-reminders`
+  (daily, `x-cron-secret`), with pure logic copied into `_shared/` from
+  `src/lib/{types,payerSetup,chargeStatus,rentPush,recurringExpenses}.ts` by
+  `node scripts/sync-edge-shared.mjs` (CI fails if stale). `send-email` and
+  `rent-reminder-check` sources are still NOT in the repo.
+- Cron template: `supabase/cron-push-reminders.sql` (placeholder secret).
+- VAPID: `node scripts/generate-vapid-keys.mjs` (stdout only). Public key →
+  repo secret `VITE_VAPID_PUBLIC_KEY` + Supabase secret `VAPID_PUBLIC_KEY`;
+  private → Supabase secret `VAPID_PRIVATE_KEY`; plus `VAPID_SUBJECT`.
+- Yearly HRA recert (`src/lib/hraRecert.ts`): due = `leases.hra_recert_due_on` (new, nullable) or `hra_approved_on` + 1 yr. Owner push 30 and 7 days before (push_send_log kind `hra_recert`). "Recert due" badge on Tenants and an item in Bills due.
+- Tests: `rent-push-test.ts`, `recurring-expense-test.ts`, `push-setup-test.ts`, `hra-recert-test.ts`.
 
 ## Working conventions Jeff has been explicit about
 

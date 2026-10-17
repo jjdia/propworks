@@ -54,7 +54,11 @@ jobs:
             scripts/vendor-link-test.ts \
             scripts/doc-parse-test.ts \
             scripts/rent-shortcuts-test.ts \
-            scripts/lease-regen-test.ts
+            scripts/lease-regen-test.ts \
+            scripts/rent-push-test.ts \
+            scripts/recurring-expense-test.ts \
+            scripts/push-setup-test.ts \
+            scripts/hra-recert-test.ts
           do
             echo "::group::npx tsx $f"
             npx tsx "$f"

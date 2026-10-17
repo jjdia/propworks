@@ -22,6 +22,7 @@ import { Notifications } from './pages/Notifications';
 import { Broadcasts } from './pages/Broadcasts';
 import { More } from './pages/More';
 import { TenantHome } from './pages/TenantHome';
+import { Bills } from './pages/Bills';
 import { ContractorJobs } from './pages/ContractorJobs';
 import { Account } from './pages/Account';
 import { AdminUsersPage } from './pages/admin';
@@ -155,6 +156,7 @@ export default function App() {
                 <Route path="/rent" element={<RentTracking />} />
                 <Route path="/triage" element={<Triage />} />
                 <Route path="/expenses" element={<Expenses />} />
+                <Route path="/bills" element={<Bills />} />
                 <Route path="/tenants" element={<Tenants />} />
                 <Route path="/contractors" element={<Contractors />} />
                 <Route path="/maintenance" element={<Maintenance />} />
