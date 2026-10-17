@@ -177,7 +177,8 @@ The scheduled `Backup Supabase` workflow has been failing (it needs the
 - VAPID: `node scripts/generate-vapid-keys.mjs` (stdout only). Public key →
   repo secret `VITE_VAPID_PUBLIC_KEY` + Supabase secret `VAPID_PUBLIC_KEY`;
   private → Supabase secret `VAPID_PRIVATE_KEY`; plus `VAPID_SUBJECT`.
-- Tests: `rent-push-test.ts`, `recurring-expense-test.ts`, `push-setup-test.ts`.
+- Yearly HRA recert (`src/lib/hraRecert.ts`): due = `leases.hra_recert_due_on` (new, nullable) or `hra_approved_on` + 1 yr. Owner push 30 and 7 days before (push_send_log kind `hra_recert`). "Recert due" badge on Tenants and an item in Bills due.
+- Tests: `rent-push-test.ts`, `recurring-expense-test.ts`, `push-setup-test.ts`, `hra-recert-test.ts`.
 
 ## Working conventions Jeff has been explicit about
 

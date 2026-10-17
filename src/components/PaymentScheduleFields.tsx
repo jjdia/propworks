@@ -139,6 +139,9 @@ export function PaymentScheduleFields({ value, onChange, proofDocuments = [] }: 
               <input type="date" className={inputCls} value={v.hraApprovedOn} onChange={(e) => set({ hraApprovedOn: e.target.value })} />
             </Field>
           </div>
+          <Field label="Yearly recert due (blank = approved date + 1 year)">
+            <input type="date" className={inputCls} value={v.hraRecertDueOn ?? ''} onChange={(e) => set({ hraRecertDueOn: e.target.value })} />
+          </Field>
           <Field label="Proof document">
             <select className={inputCls} value={v.hraProofDocumentId} onChange={(e) => set({ hraProofDocumentId: e.target.value })}>
               <option value="">— None / add a new note below —</option>

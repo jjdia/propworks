@@ -19,7 +19,7 @@ const fn = readFileSync('supabase/functions/push-reminders/index.ts', 'utf8');
 const mig = readFileSync('supabase/schema-v10-push-and-recurring.sql', 'utf8');
 check('edge function checks x-cron-secret against CRON_SECRET', /x-cron-secret/.test(fn) && /Deno\.env\.get\('CRON_SECRET'\)/.test(fn));
 check('edge function claims dedupe_key before sending', fn.indexOf("onConflict: 'dedupe_key'") > 0 && fn.indexOf("onConflict: 'dedupe_key'") < fn.indexOf('sendNotification('));
-check('edge function targets OWNERS only (no tenant pushes)', /\.eq\('role', 'owner'\)/.test(fn) && !/role === 'tenant'|tenantUsers|tenant_id: d\./.test(fn) && (fn.match(/sendLogged\(sb,/g) ?? []).length === 2);
+check('edge function targets OWNERS only (no tenant pushes)', /\.eq\('role', 'owner'\)/.test(fn) && !/role === 'tenant'|tenantUsers|tenant_id: d\./.test(fn) && (fn.match(/sendLogged\(sb,/g) ?? []).length === 3);
 const tenantHome = readFileSync('src/pages/TenantHome.tsx', 'utf8');
 check('tenant portal has no push subscribe card', !/PushSettings/.test(tenantHome));
 check('push_subscriptions stays generic (no role column)', !/role/.test(mig.slice(mig.indexOf('create table if not exists push_subscriptions'), mig.indexOf('alter table push_subscriptions'))));
@@ -42,6 +42,9 @@ check('v10 creates tables with if not exists', (code.match(/create table if not 
 check('v10 enables RLS on all new tables', ['push_subscriptions', 'push_send_log', 'recurring_expenses'].every((t) => code.includes(`alter table ${t} enable row level security`)));
 check('push_subscriptions RLS = own rows only', /using \(user_id = auth\.uid\(\)\)\s*with check \(user_id = auth\.uid\(\)\)/.test(code));
 check('v10 adds expenses.recurring_expense_id additively', code.includes('alter table expenses add column if not exists recurring_expense_id uuid'));
+check('v10 adds leases.hra_recert_due_on additively', code.includes('alter table leases add column if not exists hra_recert_due_on date'));
+check('push_send_log allows hra_recert kind', code.includes("'hra_recert'"));
+check('edge function sends HRA recert to owners via push_send_log', /kind: 'hra_recert'/.test(fn) && /subsFor\(ownerUsers\), `\$\{appUrl\}tenants`/.test(fn));
 check('v10 does not schedule cron (needs the real secret)', !code.includes('cron.schedule'));
 const cron = readFileSync('supabase/cron-push-reminders.sql', 'utf8');
 check('cron template uses <CRON_SECRET> placeholder', cron.includes("'<CRON_SECRET>'"));

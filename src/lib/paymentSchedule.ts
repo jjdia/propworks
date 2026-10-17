@@ -15,6 +15,8 @@ export interface PaymentScheduleValue {
   tenantFrequency: PaymentFrequency | null;
   hraCaseNumber: string;
   hraApprovedOn: string;
+  /** Blank = approved date + 1 year. */
+  hraRecertDueOn: string;
   hraProofDocumentId: string;
   /** Optional: create a new proof note in Documents with this title on save. */
   hraProofNewTitle: string;
@@ -23,7 +25,7 @@ export interface PaymentScheduleValue {
 export const BLANK_SCHEDULE: PaymentScheduleValue = {
   setup: 'self_pay', govProgram: 'section8', govPortion: '', govFrequency: 'monthly',
   tenantPortion: '', tenantFrequency: null,
-  hraCaseNumber: '', hraApprovedOn: '', hraProofDocumentId: '', hraProofNewTitle: '',
+  hraCaseNumber: '', hraApprovedOn: '', hraRecertDueOn: '', hraProofDocumentId: '', hraProofNewTitle: '',
 };
 
 export function scheduleFromLease(l: Lease): PaymentScheduleValue {
@@ -42,6 +44,7 @@ export function scheduleFromLease(l: Lease): PaymentScheduleValue {
     tenantFrequency: l.tenant_payment_frequency ?? null,
     hraCaseNumber: l.hra_case_number ?? '',
     hraApprovedOn: l.hra_approved_on ?? '',
+    hraRecertDueOn: l.hra_recert_due_on ?? '',
     hraProofDocumentId: l.hra_proof_document_id ?? '',
     hraProofNewTitle: '',
   };
@@ -57,7 +60,7 @@ export function scheduleToLeaseFields(v: PaymentScheduleValue, proofDocumentId?:
   const legacyHraGov = normalizeProgram(v.govProgram) === 'hra';
   const fields: Pick<Lease,
     'subsidy_program' | 'government_portion' | 'government_payment_frequency' | 'tenant_portion'
-    | 'tenant_payment_method' | 'tenant_payment_frequency' | 'hra_case_number' | 'hra_approved_on' | 'hra_proof_document_id'> = {
+    | 'tenant_payment_method' | 'tenant_payment_frequency' | 'hra_case_number' | 'hra_approved_on' | 'hra_proof_document_id' | 'hra_recert_due_on'> = {
     subsidy_program: (gov ? v.govProgram : 'none') as SubsidyProgram,
     government_portion: gov && v.govPortion ? Number(v.govPortion) : undefined,
     government_payment_frequency: legacyHraGov ? 'twice_monthly' : v.govFrequency,
@@ -70,6 +73,7 @@ export function scheduleToLeaseFields(v: PaymentScheduleValue, proofDocumentId?:
     // so flipping setups back and forth never loses it.
     hra_case_number: v.hraCaseNumber.trim() || null,
     hra_approved_on: v.hraApprovedOn || null,
+    hra_recert_due_on: v.hraRecertDueOn || null,
     hra_proof_document_id: proofDocumentId ?? (v.hraProofDocumentId || null),
   };
   return fields;

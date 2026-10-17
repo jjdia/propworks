@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { db } from '../lib/db';
 import { billsDue, payAndLogPrefill, RECURRING_CATEGORY_LABEL, type Occurrence } from '../lib/recurringExpenses';
 import { ExpenseFormModal, type ExpensePrefill } from './ExpenseFormModal';
+import { recertItems } from '../lib/hraRecert';
 
 const localToday = () => format(new Date(), 'yyyy-MM-dd');
 
@@ -14,9 +15,12 @@ export function BillsDueCard({ compact = false }: { compact?: boolean }) {
   const expenses = useLiveQuery(() => db.expenses.filter((e) => !e.deleted_at && !!e.recurring_expense_id).toArray(), []);
   const properties = useLiveQuery(() => db.properties.toArray(), []);
   const units = useLiveQuery(() => db.rental_units.toArray(), []);
+  const leases = useLiveQuery(() => db.leases.filter((l) => !l.deleted_at).toArray(), []);
+  const tenants = useLiveQuery(() => db.tenants.toArray(), []);
   const [prefill, setPrefill] = useState<ExpensePrefill | null>(null);
-  if (!bills || !expenses || !properties || !units) return null;
+  if (!bills || !expenses || !properties || !units || !leases || !tenants) return null;
   const today = localToday();
+  const recerts = recertItems(leases, tenants, today);
   const list = billsDue(bills, expenses, today);
   const where = (o: Occurrence) => {
     const p = properties.find((x) => x.id === o.bill.property_id)?.name ?? 'Property';
@@ -45,7 +49,7 @@ export function BillsDueCard({ compact = false }: { compact?: boolean }) {
         <Link to="/bills" className="text-xs text-indigo-300">Manage bills →</Link>
       </div>
       {empty && <p className="text-xs text-slate-400">No recurring bills yet. <Link to="/bills" className="text-indigo-300">Set up default bills</Link> (mortgage, tax, insurance, utilities).</p>}
-      {!empty && list.overdue.length === 0 && list.dueSoon.length === 0 && <p className="text-xs text-slate-400">Nothing due in the next 7 days.</p>}
+      {!empty && list.overdue.length === 0 && list.dueSoon.length === 0 && recerts.length === 0 && <p className="text-xs text-slate-400">Nothing due in the next 7 days.</p>}
       {list.overdue.length > 0 && <ul className="space-y-1">{list.overdue.map((o) => row(o, 'text-rose-400', `overdue · due ${o.dueDate}`))}</ul>}
       {list.dueSoon.length > 0 && <ul className="space-y-1">{list.dueSoon.map((o) => row(o, 'text-amber-300', o.status === 'due_today' ? 'due today' : `due ${o.dueDate}`))}</ul>}
       {!compact && list.loggedThisMonth.length > 0 && (
@@ -53,6 +57,21 @@ export function BillsDueCard({ compact = false }: { compact?: boolean }) {
           <summary className="text-slate-400 cursor-pointer">Logged this month ({list.loggedThisMonth.length})</summary>
           <ul className="space-y-1 mt-1">{list.loggedThisMonth.map((o) => row(o, 'text-emerald-400', 'logged', false))}</ul>
         </details>
+      )}
+      {recerts.length > 0 && (
+        <ul className="space-y-1">
+          {recerts.map((r) => (
+            <li key={r.leaseId} className="flex items-center justify-between gap-2 bg-slate-950 rounded-lg px-2 py-1.5">
+              <div className="min-w-0">
+                <div className="text-sm truncate">HRA recert · {r.tenantName}</div>
+                <div className="text-[11px] text-slate-400">{r.dueDate ? `due ${r.dueDate}${r.source === 'approved_plus_1y' ? ' (approved + 1 yr)' : ''}` : 'no approved/recert date on the lease'}</div>
+              </div>
+              <Link to="/tenants" className={`shrink-0 text-[10px] uppercase tracking-wide rounded px-1.5 py-0.5 ${r.status === 'overdue' ? 'bg-rose-950 text-rose-300' : r.status === 'unknown' ? 'bg-slate-800 text-slate-400' : 'bg-amber-950 text-amber-300'}`}>
+                {r.status === 'overdue' ? 'Recert overdue' : r.status === 'unknown' ? 'Set date' : `Recert due · ${r.daysUntil}d`}
+              </Link>
+            </li>
+          ))}
+        </ul>
       )}
       {list.needsDueDay.length > 0 && <p className="text-[11px] text-slate-500">{list.needsDueDay.length} bill{list.needsDueDay.length === 1 ? '' : 's'} need a due day — <Link to="/bills" className="text-indigo-300">set them</Link> to get reminders.</p>}
       {prefill && <ExpenseFormModal prefill={prefill} onClose={() => setPrefill(null)} />}

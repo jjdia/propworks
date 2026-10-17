@@ -1,5 +1,6 @@
 // push-reminders — daily Web Push to the OWNERS only (Jeff + Lana): rent-due
-// summary on the 1st/15th and recurring-bill due days (V 34). Jeff's rule:
+// summary on the 1st/15th, recurring-bill due days, and yearly HRA recert
+// (30 and 7 days before) (V 34). Jeff's rule:
 // tenants never get pushes; the owners follow up with tenants themselves.
 //
 // Triggered by pg_cron (supabase/cron-push-reminders.sql) with the same
@@ -24,6 +25,7 @@ import webpush from 'npm:web-push@3.6.7';
 import { planRentPushes, buildLandlordSummary, ownerSummaryDedupeKey } from '../_shared/rentPush.ts';
 import { billsDueToday, RECURRING_CATEGORY_LABEL, periodOf } from '../_shared/recurringExpenses.ts';
 import { fmtMoney } from '../_shared/chargeStatus.ts';
+import { recertPushes } from '../_shared/hraRecert.ts';
 
 type Json = Record<string, unknown>;
 const json = (b: Json, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'Content-Type': 'application/json' } });
@@ -139,6 +141,20 @@ Deno.serve(async (req) => {
       }, subsFor(ownerUsers), `${appUrl}bills`, dryRun));
     }
     out.billPushes = billPushes;
+
+    // Yearly HRA recert (gov + HRA leases): 30 and 7 days before, owners only.
+    const [{ data: hraLeases }, { data: tenantNames }] = await Promise.all([
+      sb.from('leases').select('*').eq('owner_id', ownerId).eq('status', 'active').eq('tenant_payment_method', 'hra').is('deleted_at', null),
+      sb.from('tenants').select('id, full_name').eq('owner_id', ownerId),
+    ]);
+    const recert: Json[] = [];
+    for (const r of recertPushes(hraLeases ?? [], tenantNames ?? [], today)) {
+      recert.push(await sendLogged(sb, {
+        owner_id: ownerId, kind: 'hra_recert', dedupe_key: r.dedupeKey, related_id: r.item.leaseId,
+        due_date: r.item.dueDate, title: r.title, body: r.body,
+      }, subsFor(ownerUsers), `${appUrl}tenants`, dryRun));
+    }
+    out.hraRecert = recert;
     results.push(out);
   }
   return json({ ok: true, dryRun, today, results });

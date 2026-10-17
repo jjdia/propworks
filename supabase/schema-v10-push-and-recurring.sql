@@ -2,7 +2,8 @@
 -- Web Push rent reminders + recurring-expense (bill) reminders.
 -- Run after schema-v9-payer-setups.sql.
 --
--- ADDITIVE ONLY: three new tables + one nullable column on expenses.
+-- ADDITIVE ONLY: three new tables + nullable columns expenses.recurring_expense_id
+-- and leases.hra_recert_due_on.
 -- No drops, no constraint changes on existing columns, no data rewrites.
 -- Safe to re-run (if not exists everywhere; policies guarded by DO blocks).
 --
@@ -49,7 +50,7 @@ create index if not exists idx_push_subscriptions_user on push_subscriptions (us
 create table if not exists push_send_log (
   id          uuid primary key default gen_random_uuid(),
   owner_id    uuid not null references auth.users(id),
-  kind        text not null check (kind in ('rent_due', 'tenant_portion_15th', 'landlord_summary', 'bill_due')),
+  kind        text not null check (kind in ('rent_due', 'tenant_portion_15th', 'landlord_summary', 'bill_due', 'hra_recert')),
   dedupe_key  text not null unique,
   tenant_id   uuid references tenants(id),
   user_id     uuid references auth.users(id),
@@ -117,3 +118,9 @@ create index if not exists idx_recurring_expenses_owner_updated on recurring_exp
 -- reason as leases.hra_proof_document_id: the outbox pushes one row at a
 -- time and an FK could reject the expense if it arrives before its bill).
 alter table expenses add column if not exists recurring_expense_id uuid;
+
+-- ------------------------------------------------ leases.hra_recert_due_on
+-- Optional explicit yearly HRA recertification date (setup 3). NULL means
+-- hra_approved_on + 1 year. No default, no backfill. Owner-only via the
+-- existing leases_owner_only policy.
+alter table leases add column if not exists hra_recert_due_on date;

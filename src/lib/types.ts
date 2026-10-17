@@ -77,6 +77,8 @@ export interface Lease extends SyncMeta {
   hra_case_number?: string | null;
   hra_approved_on?: string | null; // YYYY-MM-DD
   hra_proof_document_id?: string | null; // documents.id (no FK on purpose)
+  // V 34: explicit yearly HRA recert date. NULL = hra_approved_on + 1 year.
+  hra_recert_due_on?: string | null; // YYYY-MM-DD
   rent_due_day?: number;
   security_deposit?: number;
   status: LeaseStatus;
