@@ -52,7 +52,8 @@ jobs:
             scripts/payment-schedule-test.ts \
             scripts/triage-test.ts \
             scripts/vendor-link-test.ts \
-            scripts/doc-parse-test.ts
+            scripts/doc-parse-test.ts \
+            scripts/rent-shortcuts-test.ts
           do
             echo "::group::npx tsx $f"
             npx tsx "$f"
