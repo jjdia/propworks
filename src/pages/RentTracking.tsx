@@ -6,7 +6,10 @@ import { useAppStore } from '../store/useAppStore';
 import { LeaseQuickAddModal } from '../components/LeaseQuickAddModal';
 import { BackfillModal } from '../components/BackfillModal';
 import { InstallmentEditModal } from '../components/InstallmentEditModal';
-import type { ChargeStatus, InstallmentStatus, RentInstallment } from '../lib/types';
+import { TenantFormModal } from '../components/TenantFormModal';
+import { LeaseFormModal } from '../components/LeaseFormModal';
+import type { ChargeStatus, InstallmentStatus, Lease, RentInstallment, Tenant } from '../lib/types';
+import { editTargetsForInstallment, tenantForLease } from '../lib/rentShortcuts';
 import { PAYER_SETUP_LABEL, PROGRAM_LABEL, payerLabel, payerSetupInfo } from '../lib/payerSetup';
 import { deriveChargeStatus, fmtMoney } from '../lib/chargeStatus';
 
@@ -39,6 +42,10 @@ export function RentTracking() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBackfillModal, setShowBackfillModal] = useState(false);
   const [editingInstallment, setEditingInstallment] = useState<RentInstallment | null>(null);
+  // Edit shortcuts reuse the Tenants-page modals (same mutations/outbox path);
+  // useLiveQuery re-renders this view when Dexie changes after save.
+  const [editTenant, setEditTenant] = useState<Tenant | null>(null);
+  const [editLease, setEditLease] = useState<Lease | null>(null);
   const [confirmFullId, setConfirmFullId] = useState<string | null>(null);
   const [markError, setMarkError] = useState<{ chargeId: string; reason: string } | null>(null);
   const [marking, setMarking] = useState(false);
@@ -95,6 +102,10 @@ export function RentTracking() {
     if (!r.ok) setMarkError({ chargeId, reason: r.reason });
   }
 
+  const instTargets = editingInstallment
+    ? editTargetsForInstallment(editingInstallment, charges, leases, tenants)
+    : { lease: null, tenant: null };
+
   const isCurrentMonth = monthKey === new Date().toISOString().slice(0, 7);
 
   return (
@@ -127,6 +138,7 @@ export function RentTracking() {
           const leaseInstallments = charge ? (installments?.filter((i) => i.rent_charge_id === charge.id) ?? []) : [];
           const info = payerSetupInfo(lease);
           const roll = charge ? deriveChargeStatus(charge, leaseInstallments, info.setup) : null;
+          const cardTenant = tenantForLease(lease, tenants);
           return (
             <div key={lease.id} className="bg-slate-900 border border-slate-800 rounded-xl p-3">
               <div className="flex items-start justify-between">
@@ -139,6 +151,12 @@ export function RentTracking() {
                     </span>
                     {info.needsReview && <span className="text-[10px] uppercase tracking-wide bg-amber-900 rounded px-1.5 py-0.5 text-amber-200" title={info.reviewReasons.join('; ')}>Review payer setup</span>}
                     {info.hraProofMissing && <span className="text-[10px] uppercase tracking-wide bg-amber-950 border border-amber-900 rounded px-1.5 py-0.5 text-amber-300">HRA proof missing</span>}
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {cardTenant && (
+                      <button onClick={() => setEditTenant(cardTenant)} className="text-xs rounded-md bg-slate-800 hover:bg-slate-700 px-2 py-1">Edit tenant</button>
+                    )}
+                    <button onClick={() => setEditLease(lease)} className="text-xs rounded-md bg-slate-800 hover:bg-slate-700 px-2 py-1">Edit lease</button>
                   </div>
                 </div>
                 <div className="text-right">
@@ -237,8 +255,12 @@ export function RentTracking() {
           installment={editingInstallment}
           onClose={() => setEditingInstallment(null)}
           onSaved={() => { void rollUpCharge(editingInstallment.rent_charge_id); setEditingInstallment(null); }}
+          onEditTenant={instTargets.tenant ? () => { setEditingInstallment(null); setEditTenant(instTargets.tenant); } : undefined}
+          onEditLease={instTargets.lease ? () => { setEditingInstallment(null); setEditLease(instTargets.lease); } : undefined}
         />
       )}
+      {editTenant && <TenantFormModal existing={editTenant} onClose={() => setEditTenant(null)} />}
+      {editLease && <LeaseFormModal existing={editLease} onClose={() => setEditLease(null)} />}
     </div>
   );
 }

@@ -4,8 +4,11 @@ import { saveRentInstallment } from '../lib/mutations';
 import { payerLabel } from '../lib/payerSetup';
 import { fmtMoney, receivedOn } from '../lib/chargeStatus';
 
-export function InstallmentEditModal({ installment, onClose, onSaved }: {
+export function InstallmentEditModal({ installment, onClose, onSaved, onEditTenant, onEditLease }: {
   installment: RentInstallment; onClose: () => void; onSaved: () => void;
+  // Optional header shortcuts (Rent Tracking). Opening one discards unsaved
+  // payment edits; the caller swaps this modal for Tenant/LeaseFormModal.
+  onEditTenant?: () => void; onEditLease?: () => void;
 }) {
   const [status, setStatus] = useState<InstallmentStatus>(installment.status);
   const [paidDate, setPaidDate] = useState(installment.paid_date ?? new Date().toISOString().slice(0, 10));
@@ -31,6 +34,12 @@ export function InstallmentEditModal({ installment, onClose, onSaved }: {
     <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-20">
       <div className="bg-slate-900 border border-slate-800 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 space-y-3">
         <h2 className="text-lg font-semibold">Update payment · {payerLabel(installment)}</h2>
+        {(onEditTenant || onEditLease) && (
+          <div className="flex flex-wrap gap-2 -mt-1">
+            {onEditTenant && <button type="button" onClick={onEditTenant} className="text-xs rounded-md bg-slate-800 hover:bg-slate-700 px-2 py-1">Edit tenant</button>}
+            {onEditLease && <button type="button" onClick={onEditLease} className="text-xs rounded-md bg-slate-800 hover:bg-slate-700 px-2 py-1">Edit lease</button>}
+          </div>
+        )}
         <p className="text-xs text-slate-400">
           Due {installment.due_date} · {fmtMoney(Number(installment.amount))} expected · currently received {fmtMoney(receivedOn(installment))}
         </p>

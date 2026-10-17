@@ -6,6 +6,7 @@ import type {
 } from './types';
 export { buildInstallments } from './installments';
 import { rollUpChargeWith, markChargeFullWith, type ChargeRollupDeps } from './chargeStatus';
+import { regenerateLeaseMonthsWith, currentMonthStart, type LeaseRegenDeps } from './leaseRegen';
 
 // Every create/update in the app should go through one of these helpers.
 // They all do the same three things, in order:
@@ -78,3 +79,18 @@ export const rollUpCharge = (chargeId: string) => rollUpChargeWith(chargeDeps, c
 
 /** Mark a month Full. Refuses (ok: false) unless every payer line is fully received. */
 export const markChargeFull = (chargeId: string) => markChargeFullWith(chargeDeps, chargeId, nowIso());
+
+// ----------------------------------- lease edit → current/future months
+const leaseRegenDeps: LeaseRegenDeps = {
+  getCharges: (leaseId) => db.rent_charges.where('lease_id').equals(leaseId).toArray(),
+  getInstallments: (chargeId) => db.rent_installments.where('rent_charge_id').equals(chargeId).toArray(),
+  saveCharge: saveRentCharge,
+  saveInstallment: saveRentInstallment,
+  softDeleteInstallment: (id) => softDelete('rent_installments', id),
+  newMeta: blankMeta,
+  rollUp: rollUpCharge,
+};
+
+/** Regenerate this month (+ pre-generated future months) unless money was received. */
+export const regenerateMonthsAfterLeaseEdit = (before: Lease, after: Lease) =>
+  regenerateLeaseMonthsWith(leaseRegenDeps, before, after, currentMonthStart());
