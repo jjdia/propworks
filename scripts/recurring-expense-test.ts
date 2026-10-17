@@ -86,9 +86,12 @@ check('property tax on the same 4', ['jac', 'fil', 'hoy', 'syc'].every((p) => ha
 check('insurance on all but Claradon', ['jac', 'fil', 'hoy', 'syc'].every((p) => has('insurance', p)) && !has('insurance', 'cla'));
 check('HOA only Claradon', has('hoa', 'cla') && plan.items.filter((i) => i.category === 'hoa').length === 1);
 check('water/sewer on all 5', plan.items.filter((i) => i.category === 'water_sewer').length === 5);
-check('gas: 48 Jackson Unit 1 + 706 Sycamore', has('gas', 'jac', 'j1') && has('gas', 'syc') && plan.items.filter((i) => i.category === 'gas').length === 2);
-check('electric: 48 Jackson Unit 1 + 706 Sycamore', has('electric', 'jac', 'j1') && has('electric', 'syc') && plan.items.filter((i) => i.category === 'electric').length === 2);
+check('gas: 48 Jackson Unit 1 + 706 Sycamore', has('gas', 'jac', 'j1') && has('gas', 'syc', 's2') && !has('gas', 'syc', 's1') && !has('gas', 'syc') && plan.items.filter((i) => i.category === 'gas').length === 2);
+check('electric: 48 Jackson Unit 1 + 706 Sycamore', has('electric', 'jac', 'j1') && has('electric', 'syc', 's2') && !has('electric', 'syc', 's1') && !has('electric', 'syc') && plan.items.filter((i) => i.category === 'electric').length === 2);
 check('internet on all but Claradon', plan.items.filter((i) => i.category === 'internet').length === 4 && !has('internet', 'cla'));
+check('706 Sycamore gas/electric carry the shared-meter note', plan.items.filter((i) => i.property.id === 'syc' && (i.category === 'gas' || i.category === 'electric')).every((i) => i.notes === 'Main house + Unit 2 (shared meter); Unit 1 pays own'));
+check('48 Jackson gas has no note', !plan.items.find((i) => i.category === 'gas' && i.property.id === 'jac')?.notes);
+check('missing Sycamore Unit 2 → unmatched, not seeded at property level', planSeed(props, units.filter((u) => u.id !== 's2'), []).unmatched.some((u) => u.target === '706 sycamore Unit 2'));
 check('total seed items = 4+4+4+1+5+2+2+4 = 26', plan.items.length === 26);
 check('re-plan marks existing items (idempotent)', planSeed(props, units, [bill('m', { category: 'mortgage', property_id: 'jac' })]).items.find((i) => i.category === 'mortgage' && i.property.id === 'jac')?.alreadyExists === true);
 const amb = planSeed([...props, P('jac2', '48 Jackson St')], units, []);

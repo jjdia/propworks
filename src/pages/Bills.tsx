@@ -176,7 +176,7 @@ function SeedModal({ ownerId, onClose }: { ownerId: string; onClose: () => void 
         rental_unit_id: item.unit?.id ?? null,
         category: item.category,
         payee: null, amount: null, due_day: null,
-        frequency: 'monthly', anchor_month: null, active: true, notes: null,
+        frequency: 'monthly', anchor_month: null, active: true, notes: item.notes ?? null,
       });
     }
     onClose();
@@ -191,7 +191,7 @@ function SeedModal({ ownerId, onClose }: { ownerId: string; onClose: () => void 
           {plan.items.map((i) => (
             <li key={i.key} className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-1" disabled={i.alreadyExists} checked={isOn(i.key, i.alreadyExists)} onChange={(e) => setPicked({ ...picked, [i.key]: e.target.checked })} />
-              <div><div>{RECURRING_CATEGORY_LABEL[i.category]} — {i.property.name}{i.unit ? ` · ${i.unit.name}` : ''}{i.alreadyExists ? ' (already set up)' : ''}</div><div className="text-[11px] text-slate-500">{i.matchedBy}</div></div>
+              <div><div>{RECURRING_CATEGORY_LABEL[i.category]} — {i.property.name}{i.unit ? ` · ${i.unit.name}` : ''}{i.alreadyExists ? ' (already set up)' : ''}</div><div className="text-[11px] text-slate-500">{i.matchedBy}{i.notes ? ` — ${i.notes}` : ''}</div></div>
             </li>
           ))}
         </ul>

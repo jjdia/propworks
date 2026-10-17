@@ -163,14 +163,20 @@ const MORTGAGED = ['48 jackson', '62 fillmore', '354 hoyt', '706 sycamore'];
 const CLARADON = '55 claradon';
 
 /** Jeff's list. 'all' expands to every active property. */
-export const SEED_RULES: { category: RecurringCategory; targets: string[] | 'all'; except?: string[]; units?: Record<string, string> }[] = [
+// 706 Sycamore (Jeff, V 34): main house + Unit 2 share ONE gas and ONE electric
+// bill (landlord pays); Unit 1 pays its own. Units on file are 'unit1' and
+// 'Unit 2' (no separate main-house record) and a bill holds one optional unit,
+// so the shared bill is attached to Unit 2 with this note.
+export const SYCAMORE_SHARED_NOTE = 'Main house + Unit 2 (shared meter); Unit 1 pays own';
+
+export const SEED_RULES: { category: RecurringCategory; targets: string[] | 'all'; except?: string[]; units?: Record<string, string>; notes?: Record<string, string> }[] = [
   { category: 'mortgage', targets: MORTGAGED },
   { category: 'property_tax', targets: MORTGAGED },
   { category: 'insurance', targets: 'all', except: [CLARADON] },
   { category: 'hoa', targets: [CLARADON] },
   { category: 'water_sewer', targets: 'all' },
-  { category: 'gas', targets: ['48 jackson', '706 sycamore'], units: { '48 jackson': 'Unit 1' } },
-  { category: 'electric', targets: ['48 jackson', '706 sycamore'], units: { '48 jackson': 'Unit 1' } },
+  { category: 'gas', targets: ['48 jackson', '706 sycamore'], units: { '48 jackson': 'Unit 1', '706 sycamore': 'Unit 2' }, notes: { '706 sycamore': SYCAMORE_SHARED_NOTE } },
+  { category: 'electric', targets: ['48 jackson', '706 sycamore'], units: { '48 jackson': 'Unit 1', '706 sycamore': 'Unit 2' }, notes: { '706 sycamore': SYCAMORE_SHARED_NOTE } },
   { category: 'internet', targets: 'all', except: [CLARADON] },
 ];
 
@@ -180,6 +186,7 @@ export interface SeedItem {
   property: Pick<Property, 'id' | 'name'>;
   unit?: Pick<RentalUnit, 'id' | 'name'>;
   matchedBy: string;
+  notes?: string;
   alreadyExists: boolean;
 }
 export interface SeedProblem { category: RecurringCategory; target: string; reason: string; candidates: Pick<Property, 'id' | 'name'>[] }
@@ -223,6 +230,7 @@ export function planSeed(properties: Property[], units: RentalUnit[], existing: 
         property: { id: property.id, name: property.name },
         unit: unit ? { id: unit.id, name: unit.name } : undefined,
         matchedBy: `"${target}"${wantUnit ? ` + unit "${wantUnit}"` : ''} → ${property.name}${property.address_line ? ` (${property.address_line})` : ''}${unit ? ` / ${unit.name}` : ''}`,
+        notes: rule.notes?.[target],
         alreadyExists,
       });
     }
