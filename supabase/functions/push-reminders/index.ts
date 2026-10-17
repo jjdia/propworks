@@ -1,5 +1,6 @@
-// push-reminders — daily Web Push for rent-due (tenants), the landlord
-// summary, and recurring-bill due days (V 34).
+// push-reminders — daily Web Push to the OWNERS only (Jeff + Lana): rent-due
+// summary on the 1st/15th and recurring-bill due days (V 34). Jeff's rule:
+// tenants never get pushes; the owners follow up with tenants themselves.
 //
 // Triggered by pg_cron (supabase/cron-push-reminders.sql) with the same
 // x-cron-secret pattern as rent-reminder-check. Runs daily; does nothing for
@@ -13,14 +14,14 @@
 // Decision logic lives in the PURE shared modules (copied from src/lib by
 // scripts/sync-edge-shared.mjs and unit-tested in scripts/*-test.ts).
 // Idempotency: push_send_log.dedupe_key is UNIQUE and is inserted BEFORE
-// sending, so a re-run sends at most one push per tenant per due date.
+// sending, so a re-run sends at most one owner summary per rent day.
 //
 // Body (optional): { "dry_run": true, "today": "YYYY-MM-DD" } — dry_run
 // returns the plan without sending or logging.
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
-import { planRentPushes, buildLandlordSummary } from '../_shared/rentPush.ts';
+import { planRentPushes, buildLandlordSummary, ownerSummaryDedupeKey } from '../_shared/rentPush.ts';
 import { billsDueToday, RECURRING_CATEGORY_LABEL, periodOf } from '../_shared/recurringExpenses.ts';
 import { fmtMoney } from '../_shared/chargeStatus.ts';
 
@@ -87,18 +88,15 @@ Deno.serve(async (req) => {
 
   const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
 
-  const { data: profiles, error: pErr } = await sb.from('profiles').select('id, owner_id, role, tenant_id');
+  const { data: profiles, error: pErr } = await sb.from('profiles').select('id, owner_id, role').eq('role', 'owner');
   if (pErr) return json({ error: pErr.message }, 500);
   const portfolios = [...new Set((profiles ?? []).filter((p) => p.role === 'owner').map((p) => p.owner_id as string))];
   const results: Json[] = [];
 
   for (const ownerId of portfolios) {
     const ownerUsers = (profiles ?? []).filter((p) => p.role === 'owner' && p.owner_id === ownerId).map((p) => p.id as string);
-    const tenantUsers = new Map<string, string[]>();
-    for (const p of profiles ?? []) {
-      if (p.role === 'tenant' && p.owner_id === ownerId && p.tenant_id) tenantUsers.set(p.tenant_id, [...(tenantUsers.get(p.tenant_id) ?? []), p.id]);
-    }
-    const allUsers = [...ownerUsers, ...[...tenantUsers.values()].flat()];
+    // Owners only — tenant profiles are never targeted.
+    const allUsers = ownerUsers;
     const { data: subs } = await sb.from('push_subscriptions').select('id, user_id, endpoint, p256dh, auth').in('user_id', allUsers);
     const subsFor = (users: string[]) => (subs ?? []).filter((s) => users.includes(s.user_id)) as Sub[];
 
@@ -116,20 +114,12 @@ Deno.serve(async (req) => {
         : { data: [] };
       const input = { today, leases: leases ?? [], charges: charges ?? [], installments: installments ?? [], tenants: tenants ?? [] };
       const plan = planRentPushes(input);
-      const sent: Json[] = [];
-      for (const d of plan.decisions) {
-        sent.push(await sendLogged(sb, {
-          owner_id: ownerId, kind: d.kind, dedupe_key: d.dedupeKey, tenant_id: d.tenantId,
-          related_id: d.leaseId, due_date: d.dueDate, title: d.title, body: d.body,
-        }, subsFor(tenantUsers.get(d.tenantId) ?? []), appUrl, dryRun));
-      }
-      const reachable = new Set([...tenantUsers.entries()].filter(([, u]) => subsFor(u).length > 0).map(([t]) => t));
-      const summary = buildLandlordSummary(plan, input, reachable);
+      const summary = buildLandlordSummary(plan, input);
       const landlord = await sendLogged(sb, {
-        owner_id: ownerId, kind: 'landlord_summary', dedupe_key: `landlord:${ownerId}:${today}`,
+        owner_id: ownerId, kind: 'landlord_summary', dedupe_key: ownerSummaryDedupeKey(ownerId, today),
         due_date: today, title: summary.title, body: summary.body,
       }, subsFor(ownerUsers), `${appUrl}rent`, dryRun);
-      Object.assign(out, { tenantPushes: sent, skipped: plan.skipped, landlord, summary });
+      Object.assign(out, { lines: plan.decisions, skipped: plan.skipped, landlord, summary });
     }
 
     // Recurring bills due today → push to the owner users.

@@ -167,6 +167,7 @@ The scheduled `Backup Supabase` workflow has been failing (it needs the
 
 - Migration `supabase/schema-v10-push-and-recurring.sql` (additive; NOT applied).
   Dexie v5 adds `recurring_expenses` (synced via outbox, in backups).
+- Push goes to OWNERS ONLY (Jeff + Lana): rent-due summary on 1st/15th + bill due days; no tenant pushes, no tenant subscribe card (push_subscriptions kept generic).
 - Edge Function source now lives in the repo: `supabase/functions/push-reminders`
   (daily, `x-cron-secret`), with pure logic copied into `_shared/` from
   `src/lib/{types,payerSetup,chargeStatus,rentPush,recurringExpenses}.ts` by

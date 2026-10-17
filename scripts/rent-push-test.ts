@@ -1,4 +1,4 @@
-import { planRentPushes, buildLandlordSummary, tenantDedupeKey } from '../src/lib/rentPush';
+import { planRentPushes, buildLandlordSummary, tenantDedupeKey, ownerSummaryDedupeKey } from '../src/lib/rentPush';
 import { buildInstallments } from '../src/lib/installments';
 import type { Lease, RentCharge, RentInstallment } from '../src/lib/types';
 
@@ -41,7 +41,6 @@ check('1st: gov+HRA (setup 3) skipped', !by(p1, 'C') && p1.skipped.some((s) => s
 check('1st: already-paid self-pay skipped', !by(p1, 'E') && p1.skipped.some((s) => s.leaseId === 'E' && s.reason === 'already_paid'));
 check('1st: ended lease ignored', !by(p1, 'F'));
 check('1st: no month generated → falls back to lease terms', by(p1, 'G')?.amount === 1750);
-check('1st: body mentions "Your portion" for gov tenant', /portion/i.test(by(p1, 'B')?.body ?? ''));
 check('dedupe key is per tenant per due date', by(p1, 'A')?.dedupeKey === tenantDedupeKey('tA', '2026-11-01'));
 
 // partial payment → remind only for remainder
@@ -74,12 +73,17 @@ const dup = { ...selfPay, id: 'A2' };
 check('one push per tenant per due date even with two leases', planRentPushes({ ...in1, leases: [selfPay, dup] }).decisions.length === 1);
 
 // ---- landlord summary
-const s1 = buildLandlordSummary(p1, in1, new Set(['tA']));
-check('summary counts reminded tenants', s1.remindedCount === 4);
+const s1 = buildLandlordSummary(p1, in1);
+check('owner summary lists 4 tenant lines due', s1.remindedCount === 4);
 check('summary outstanding = A 2000 + B 4000 + C 4000 + D 4000', s1.outstandingTotal === 14000);
-check('summary flags tenants with no push device', /Tenant B \$500\.00 \(no push device\)/.test(s1.body) && /Tenant A \$2,000\.00(?! \(no)/.test(s1.body));
+check('owner summary shows per-tenant amount + type', /Tenant A \$2,000\.00 \(rent\)/.test(s1.body) && /Tenant B \$500\.00 \(tenant portion\)/.test(s1.body));
+check('owner summary omits HRA-covered tenant and notes the skip', !/Tenant C/.test(s1.body) && /1 HRA-covered/.test(s1.body));
+check('owner summary omits already-paid tenant', !/Tenant E/.test(s1.body));
+check('owner summary dedupe = one per portfolio per day', ownerSummaryDedupeKey('o1', '2026-11-01') === 'landlord:o1:2026-11-01');
 check('summary mentions already paid', /1 already paid/.test(s1.body));
-check('15th summary title', buildLandlordSummary(p15, in15, new Set()).title.includes('15th'));
+const s15 = buildLandlordSummary(p15, in15);
+check('15th owner summary: only gov+tenant twice-monthly portion', s15.title.includes('15th') && /Tenant B \$500\.00/.test(s15.body) && !/Tenant A|Tenant D/.test(s15.body));
+check('15th owner summary when 15th already paid says nothing due', /Nothing due from tenants today/.test(buildLandlordSummary(p15b, { ...in15, installments: [...aI, ...bPaid15, ...cI, ...dI, ...eI] }).body));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

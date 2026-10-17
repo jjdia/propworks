@@ -16,8 +16,13 @@ let syncOk = true;
 try { execFileSync('node', ['scripts/sync-edge-shared.mjs', '--check'], { stdio: 'pipe' }); } catch { syncOk = false; }
 check('supabase/functions/_shared matches src/lib (run node scripts/sync-edge-shared.mjs)', syncOk);
 const fn = readFileSync('supabase/functions/push-reminders/index.ts', 'utf8');
+const mig = readFileSync('supabase/schema-v10-push-and-recurring.sql', 'utf8');
 check('edge function checks x-cron-secret against CRON_SECRET', /x-cron-secret/.test(fn) && /Deno\.env\.get\('CRON_SECRET'\)/.test(fn));
 check('edge function claims dedupe_key before sending', fn.indexOf("onConflict: 'dedupe_key'") > 0 && fn.indexOf("onConflict: 'dedupe_key'") < fn.indexOf('sendNotification('));
+check('edge function targets OWNERS only (no tenant pushes)', /\.eq\('role', 'owner'\)/.test(fn) && !/role === 'tenant'|tenantUsers|tenant_id: d\./.test(fn) && (fn.match(/sendLogged\(sb,/g) ?? []).length === 2);
+const tenantHome = readFileSync('src/pages/TenantHome.tsx', 'utf8');
+check('tenant portal has no push subscribe card', !/PushSettings/.test(tenantHome));
+check('push_subscriptions stays generic (no role column)', !/role/.test(mig.slice(mig.indexOf('create table if not exists push_subscriptions'), mig.indexOf('alter table push_subscriptions'))));
 check('edge function reads VAPID private key from env only', /Deno\.env\.get\('VAPID_PRIVATE_KEY'\)/.test(fn));
 
 // VAPID keys
@@ -31,7 +36,6 @@ check('VAPID public key matches private key', ecdh.getPublicKey().equals(pubRaw)
 check('two runs give different keys', generateVapidKeys().privateKey !== k.privateKey);
 
 // migration is additive
-const mig = readFileSync('supabase/schema-v10-push-and-recurring.sql', 'utf8');
 const code = mig.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n').toLowerCase();
 check('v10 has no drop/truncate/delete/update/alter column type', !/\b(drop\s+(table|column|policy|constraint)|truncate|delete\s+from|update\s+\w+\s+set|alter\s+column)\b/.test(code));
 check('v10 creates tables with if not exists', (code.match(/create table if not exists/g) ?? []).length === 3 && !/create table (?!if not exists)/.test(code));

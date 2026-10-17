@@ -3,8 +3,12 @@ import type { Lease, RentCharge, RentInstallment, Tenant } from './types.ts';
 import { payerSetup, tenantShareFrequency, type PayerSetup } from './payerSetup.ts';
 import { receivedOn, deriveChargeStatus, fmtMoney } from './chargeStatus.ts';
 
+const SETUP_SHORT: Record<PayerSetup, string> = { self_pay: 'rent', gov_tenant: 'tenant portion', gov_hra: 'HRA' };
+
 // ---------------------------------------------------------------------------
-// Rent-due push decisions (V 34). PURE: no Dexie, no Supabase, no Date.now().
+// Rent-due OWNER reminders (V 34). Jeff's rule: rent pushes go ONLY to the
+// owners (Jeff + Lana), never to tenants. The per-tenant decisions below are
+// the LINES of the owner summary push, not tenant pushes. PURE: no Dexie, no Supabase, no Date.now().
 // Shared verbatim with the `push-reminders` Edge Function (copied into
 // supabase/functions/_shared by scripts/sync-edge-shared.mjs).
 //
@@ -17,7 +21,7 @@ import { receivedOn, deriveChargeStatus, fmtMoney } from './chargeStatus.ts';
 //   - gov_hra (setup 3, HRA pays the whole tenant share): tenant-portion
 //     reminders are skipped entirely.
 //   - Skip when that portion is already fully received for the period.
-//   - Dedupe key = one push per tenant per due date.
+//   - One owner summary per portfolio per rent day (dedupe in the function).
 // ---------------------------------------------------------------------------
 
 export type RentPushKind = 'rent_due' | 'tenant_portion_15th';
@@ -30,9 +34,7 @@ export interface RentPushDecision {
   dueDate: string; // YYYY-MM-DD
   amount: number; // outstanding on this check
   setup: PayerSetup;
-  dedupeKey: string;
-  title: string;
-  body: string;
+  dedupeKey: string; // per tenant per due date (line-level dedupe)
 }
 
 export interface RentPushSkip {
@@ -130,10 +132,6 @@ export function planRentPushes(input: RentPushInput): RentPushPlan {
       amount,
       setup,
       dedupeKey: key,
-      title: kind === 'rent_due' ? 'Rent is due' : 'Your rent portion is due',
-      body: kind === 'rent_due'
-        ? `${setup === 'gov_tenant' ? 'Your portion of rent' : 'Rent'} (${fmtMoney(amount)}) is due today.`
-        : `The 15th payment of your rent portion (${fmtMoney(amount)}) is due today.`,
     });
   }
   return plan;
@@ -146,8 +144,12 @@ export interface LandlordSummary {
   outstandingTotal: number;
 }
 
-/** Landlord summary push: who was reminded + what's outstanding this month. */
-export function buildLandlordSummary(plan: RentPushPlan, input: RentPushInput, reachable: Set<string>): LandlordSummary {
+export function ownerSummaryDedupeKey(ownerId: string, today: string) {
+  return `landlord:${ownerId}:${today}`;
+}
+
+/** Owner summary push: what's due per tenant today + what's outstanding this month. */
+export function buildLandlordSummary(plan: RentPushPlan, input: RentPushInput): LandlordSummary {
   const month = monthStart(input.today);
   let outstandingTotal = 0;
   for (const lease of input.leases) {
@@ -158,16 +160,18 @@ export function buildLandlordSummary(plan: RentPushPlan, input: RentPushInput, r
     outstandingTotal += deriveChargeStatus(charge, insts, payerSetup(lease)).outstanding;
   }
   outstandingTotal = Math.round(outstandingTotal * 100) / 100;
-  const names = plan.decisions.map((d) => `${d.tenantName} ${fmtMoney(d.amount)}${reachable.has(d.tenantId) ? '' : ' (no push device)'}`);
+  const names = plan.decisions.map((d) => `${d.tenantName} ${fmtMoney(d.amount)} (${SETUP_SHORT[d.setup]})`);
   const paid = plan.skipped.filter((s) => s.reason === 'already_paid').length;
+  const hra = plan.skipped.filter((s) => s.reason === 'hra_pays_tenant_share').length;
   const day = dayOf(input.today);
   const parts = [
-    names.length ? `Due: ${names.join(', ')}.` : 'No tenant reminders due.',
+    names.length ? `Due today: ${names.join(', ')}.` : 'Nothing due from tenants today.',
     paid ? `${paid} already paid.` : '',
+    hra ? `${hra} HRA-covered (skipped).` : '',
     `Outstanding this month: ${fmtMoney(outstandingTotal)}.`,
   ].filter(Boolean);
   return {
-    title: day === 15 ? 'Rent check-in (15th)' : 'Rent day summary',
+    title: day === 15 ? 'Rent due (15th): tenant portions' : 'Rent due today',
     body: parts.join(' '),
     remindedCount: plan.decisions.length,
     outstandingTotal,

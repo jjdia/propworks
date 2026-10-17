@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { getPushState, subscribePush, unsubscribePush, isIos, type PushState } from '../lib/push';
 
-const COPY: Record<'tenant' | 'owner', { title: string; blurb: string }> = {
-  tenant: { title: 'Rent reminders on this device', blurb: 'Get a push notification on the day your rent (or your portion) is due. Nothing is sent if it\'s already paid.' },
-  owner: { title: 'Push alerts on this device', blurb: 'Rent-day summary on the 1st and 15th (who was reminded, what\'s outstanding) and a reminder on each bill\'s due day.' },
+// Owner-only for now (Jeff: rent reminders go to owners, never tenants).
+// push_subscriptions stays generic so another audience can reuse it later.
+const COPY: Record<'owner', { title: string; blurb: string }> = {
+  owner: { title: 'Push alerts on this device', blurb: 'Rent due summary on the 1st and 15th (what each tenant owes, skipping paid and HRA-covered shares) and a reminder on each bill\'s due day.' },
 };
 
-export function PushSettings({ audience }: { audience: 'tenant' | 'owner' }) {
+export function PushSettings({ audience }: { audience: 'owner' }) {
   const [state, setState] = useState<PushState | 'loading'>('loading');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
