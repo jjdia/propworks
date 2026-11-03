@@ -25,6 +25,7 @@ const TABLES = [
   'properties', 'rental_units', 'tenants', 'leases',
   'rent_charges', 'rent_payments', 'rent_installments', 'expenses', 'documents',
   'contractors', 'maintenance_schedules', 'recurring_expenses',
+  'tenant_messages', // V 35 (schema-v11)
 ] as const;
 type SyncTable = typeof TABLES[number];
 

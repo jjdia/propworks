@@ -57,7 +57,7 @@ const leaks = files.filter((f) => {
 });
 check(`no VAPID private key / service-role JWT / cron secret in tracked files (${files.length} scanned)`, leaks.length === 0);
 if (leaks.length) console.log('  leaks in:', leaks.join(', '));
-check('functions dir has only push-reminders + _shared', readdirSync('supabase/functions').sort().join() === '_shared,push-reminders');
+check('functions dir has only push-reminders + translate + _shared', readdirSync('supabase/functions').sort().join() === '_shared,push-reminders,translate');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

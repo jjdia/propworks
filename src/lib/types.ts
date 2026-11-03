@@ -1,3 +1,4 @@
+import type { MessageFields } from './translation';
 // Shared record shape: every synced entity has these fields.
 // `dirty` and `pendingDelete` are LOCAL-ONLY (never sent to Supabase) — they
 // drive the outbox sync engine. `deleted_at` IS sent to Supabase (soft delete).
@@ -164,6 +165,13 @@ export interface RecurringExpense extends SyncMeta {
   anchor_month?: number | null; // 1-12, first due month for non-monthly bills
   active: boolean;
   notes?: string | null;
+}
+
+// V 35 tenant messages (owner-private → Dexie + outbox). Incoming = what a
+// tenant wrote (original + detected language + English). Outgoing = Jeff's
+// English reply + translation, which must be approved before it is sent.
+export interface TenantMessage extends SyncMeta, MessageFields {
+  channel?: string | null; // 'sms' | 'whatsapp' | 'email' | 'in_person' | 'other'
 }
 
 export const EXPENSE_CATEGORIES = [
