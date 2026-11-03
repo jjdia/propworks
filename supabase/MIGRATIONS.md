@@ -18,7 +18,9 @@ reference/reproducibility and must be applied **in order** on a fresh project.
 | `schema-v9-payer-setups.sql` | issue #10 — see HANDOFF "Payer setups" for live-apply status |
 | `schema-v10-push-and-recurring.sql` | Applied 2026-10-17 ~16:20 ET via the Management API SQL endpoint (V 34), so it is **not** recorded in `schema_migrations`. Pre-v10 backup: `backups/propworks-live-20261017T201459Z-pre-v10.sql.gz`. Adds `push_subscriptions`, `push_send_log`, `recurring_expenses`, `expenses.recurring_expense_id` |
 
-Next free number: **v11**.
+| `schema-v11-message-translation.sql` | **NOT applied** (V 35). Additive: new owner-only table `tenant_messages` (Dexie v6). Apply after the backup gate and before deploying V 35. |
+
+Next free number: **v12**.
 
 `push-reminders-daily` (jobid 3, `5 13 * * *`) was scheduled 2026-10-17 by copying the v7 job's command server-side and swapping only the function path, so it uses the same inline secret. The value never left the DB.
 

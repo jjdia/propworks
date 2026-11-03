@@ -184,6 +184,25 @@ The scheduled `Backup Supabase` workflow has been failing (it needs the
 - Yearly HRA recert (`src/lib/hraRecert.ts`): due = `leases.hra_recert_due_on` (new, nullable) or `hra_approved_on` + 1 yr. Owner push 30 and 7 days before (push_send_log kind `hra_recert`). "Recert due" badge on Tenants and an item in Bills due.
 - Tests: `rent-push-test.ts`, `recurring-expense-test.ts`, `push-setup-test.ts`, `hra-recert-test.ts`.
 
+## V 35 — tenant-message translation (PR, NOT released)
+
+- Self-hosted LibreTranslate behind the new owner-only Edge Function
+  `supabase/functions/translate` (detect + translate; JWT required, profile
+  role must be 'owner', no service role). Secrets `LIBRETRANSLATE_URL`,
+  optional `LIBRETRANSLATE_API_KEY` — NOT set yet; see
+  `docs/translation-server.md`. Unset → 503 `translation_not_configured`,
+  app degrades gracefully.
+- Migration `supabase/schema-v11-message-translation.sql` (additive; NOT
+  applied): `tenant_messages` (original text + detected language + English
+  together; outgoing drafts with approval fields; CHECK that 'sent' requires
+  approval). Dexie v6 adds `tenant_messages` (outbox-synced, in backups).
+- UI: More → Tenant messages (`/messages`). Incoming pasted messages auto
+  translate to English. Replies: English → tenant language preview, both
+  sides editable, **Approve** required; any edit drops approval. Send =
+  sms: link / Web Share / copy, all gated by `canSend()`/`markSent()` in
+  `src/lib/translation.ts` (shared to `_shared/` by sync-edge-shared).
+- Test: `scripts/translation-test.ts`.
+
 ## Working conventions Jeff has been explicit about
 
 - **Every form/modal must have a Cancel button.** He found and was
